@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Events Studio — Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Beau+Rivage&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Source+Sans+3:wght@300;400;600&display=swap" rel="stylesheet">
+
+<style>
+/* ============ THEME (same family as the invitation) ============ */
+:root{
+  --bg:#261e18; --bg-2:#1c150f; --card:#2f261e; --line:rgba(228,197,138,.22);
+  --gold:#e4c58a; --gold-hi:#f7e3b0; --gold-dim:#8a6f45; --cream:#fff4df; --wax:#7c2d2d;
+  --ok:#5f8a5a;
+  --f-script:'Beau Rivage',cursive; --f-head:'Cormorant Garamond',serif; --f-body:'Source Sans 3',sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--cream);font-family:var(--f-body);font-weight:300;line-height:1.6;min-height:100dvh}
+h1,h2,h3{font-family:var(--f-head);font-weight:500}
+button{font-family:var(--f-body);cursor:pointer}
+input,textarea,select{font-family:var(--f-body);font-size:1rem;color:var(--cream);background:var(--bg-2);
+  border:1px solid var(--line);border-radius:10px;padding:11px 14px;width:100%;outline:none}
+input:focus,textarea:focus,select:focus{border-color:var(--gold)}
+input[type="color"]{padding:2px;height:44px}
+label{display:block;font-size:.72rem;letter-spacing:.18em;text-transform:uppercase;color:var(--gold-dim);margin:14px 0 6px}
+textarea{resize:vertical;min-height:70px}
+.hidden{display:none!important}
+
+.btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:transparent;
+  color:var(--cream);border-radius:999px;padding:11px 22px;font-size:.85rem;letter-spacing:.12em;
+  text-transform:uppercase;transition:.2s}
+.btn:hover{border-color:var(--gold);color:var(--gold-hi)}
+.btn.solid{background:var(--gold);color:#241b12;border-color:var(--gold);font-weight:600}
+.btn.solid:hover{background:var(--gold-hi)}
+.btn.danger{color:#d98c8c;border-color:rgba(217,140,140,.35)}
+.btn.small{padding:7px 14px;font-size:.72rem}
+.btn:disabled{opacity:.45;cursor:wait}
+
+/* ============ LAYOUT ============ */
+header.top{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:18px clamp(16px,4vw,42px);border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:5}
+.brand{font-family:var(--f-script);font-size:1.7rem;color:var(--gold)}
+main{max-width:980px;margin:0 auto;padding:clamp(16px,4vw,40px)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:clamp(18px,3.5vw,30px);margin-bottom:22px}
+.grid2{display:grid;grid-template-columns:1fr;gap:0 22px}
+@media(min-width:760px){.grid2{grid-template-columns:1fr 1fr}}
+.sect-title{font-family:var(--f-head);font-size:1.35rem;color:var(--gold);border-bottom:1px solid var(--line);
+  padding-bottom:8px;margin:26px 0 4px}
+.sect-title:first-child{margin-top:0}
+.hint{font-size:.8rem;color:rgba(255,244,223,.5);margin-top:4px}
+.row{display:flex;gap:10px;align-items:end;flex-wrap:wrap}
+.row > *{flex:1;min-width:120px}
+.actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:24px}
+
+/* auth */
+#auth-wrap{max-width:420px;margin:12vh auto;padding:0 18px}
+#auth-wrap .brand{display:block;text-align:center;font-size:2.4rem;margin-bottom:6px}
+#auth-wrap .sub{text-align:center;color:var(--gold-dim);letter-spacing:.3em;text-transform:uppercase;font-size:.72rem;margin-bottom:26px}
+.msg{margin-top:14px;font-size:.9rem;border-radius:10px;padding:10px 14px;display:none}
+.msg.err{display:block;background:rgba(124,45,45,.25);color:#eec3c3;border:1px solid rgba(217,140,140,.3)}
+.msg.ok{display:block;background:rgba(95,138,90,.2);color:#cfe6ca;border:1px solid rgba(120,170,110,.35)}
+
+/* wedding list */
+.w-item{display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between;
+  border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-bottom:12px;background:var(--bg-2)}
+.w-item .meta b{font-family:var(--f-head);font-size:1.15rem;font-weight:600;display:block}
+.w-item .meta span{font-size:.8rem;color:var(--gold-dim)}
+.badge{font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;border-radius:999px;padding:4px 12px;border:1px solid}
+.badge.draft{color:var(--gold-dim);border-color:var(--gold-dim)}
+.badge.published{color:#a9d69f;border-color:#5f8a5a}
+.badge.revoked{color:#d98c8c;border-color:#7c2d2d}
+
+/* link box */
+.link-box{display:flex;gap:10px;align-items:center;background:var(--bg-2);border:1px dashed var(--gold-dim);
+  border-radius:12px;padding:12px 14px;margin-top:14px;flex-wrap:wrap}
+.link-box code{flex:1;min-width:200px;color:var(--gold-hi);font-size:.85rem;word-break:break-all;background:none;border:none}
+
+/* upload widget */
+.up{display:flex;gap:12px;align-items:center;margin-top:6px}
+.up img, .up .ph{width:64px;height:64px;border-radius:10px;object-fit:cover;border:1px solid var(--line);flex:none}
+.up .ph{display:flex;align-items:center;justify-content:center;color:var(--gold-dim);font-size:1.4rem;background:var(--bg-2)}
+.up .grow{flex:1;display:flex;flex-direction:column;gap:6px}
+.up input[type="file"]{padding:8px;font-size:.8rem}
+.up .url{font-size:.75rem;color:var(--gold-dim);word-break:break-all}
+.up-clear{flex:none!important;width:auto}
+
+/* repeater rows */
+.rep{display:grid;grid-template-columns:1fr 2fr 3fr auto;gap:8px;margin-top:8px;align-items:center}
+#f-texts{display:grid;grid-template-columns:1fr;gap:0 22px;margin-top:6px}
+@media(min-width:760px){#f-texts{grid-template-columns:1fr 1fr}}
+#f-texts .tk.wide{grid-column:1/-1}
+#f-texts textarea{min-height:52px}
+.rep .c{grid-template-columns:2fr 1fr auto}
+.rep button{width:40px;height:40px;border-radius:10px;border:1px solid var(--line);background:none;color:#d98c8c;font-size:1.1rem;flex:none}
+@media(max-width:640px){.rep{grid-template-columns:1fr 1fr;}.rep input,.rep select{grid-column:auto}.rep button{grid-column:span 2}}
+
+/* toast */
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--gold);
+  color:#241b12;font-weight:600;padding:12px 26px;border-radius:999px;opacity:0;transition:.3s;z-index:50;pointer-events:none}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.back{color:var(--gold-dim);text-transform:uppercase;letter-spacing:.2em;font-size:.75rem;text-decoration:none}
+.back:hover{color:var(--gold)}
+#setup-note{border-color:rgba(217,140,140,.4);background:rgba(124,45,45,.15)}
+.banner{border:1px dashed var(--gold-dim);background:rgba(228,197,138,.08);color:var(--gold-hi);
+  border-radius:12px;padding:12px 16px;font-size:.85rem;margin-bottom:18px;line-height:1.6}
+.banner b{color:var(--gold-hi)}
+</style>
+</head>
+<body>
+
+<!-- ================= AUTH ================= -->
+<div id="view-auth">
+  <div id="auth-wrap">
+    <img src="logo.png" alt="Events Studio" style="width:96px;height:96px;display:block;margin:0 auto 6px;filter:drop-shadow(0 0 18px rgba(228,197,138,.45))">
+    <span class="brand" style="font-family:var(--f-head);letter-spacing:.35em;text-transform:uppercase;font-size:1.35rem">Events Studio</span>
+    <div class="sub">Admin Panel</div>
+    <div class="banner hidden" id="auth-banner">
+      <b>Demo mode</b> — Firebase is not connected yet, so this browser works as a local database.
+      Sign in with any email + password (4+ chars) and test the whole flow: create a wedding,
+      fill all info, upload photos, generate the guest link, see live updates.
+      Paste your Firebase keys in <code>config.js</code> to go online.
+    </div>
+    <div class="card">
+      <label>Email</label>
+      <input id="a-email" type="email" autocomplete="username" placeholder="you@example.com">
+      <label>Password</label>
+      <input id="a-pass" type="password" autocomplete="current-password" placeholder="min 6 characters">
+      <div class="actions">
+        <button class="btn solid" id="a-in">Sign in</button>
+      </div>
+      <div class="msg" id="a-msg"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= APP ================= -->
+<div id="view-app" class="hidden">
+  <header class="top">
+    <span style="display:flex;align-items:center;gap:12px">
+      <img src="logo.png" alt="" style="width:34px;height:34px">
+      <span class="brand" style="font-family:var(--f-head);letter-spacing:.28em;text-transform:uppercase;font-size:1rem">Events Studio</span>
+    </span>
+    <span>
+      <span id="u-email" style="font-size:.85rem;color:var(--gold-dim)"></span>
+      <button class="btn small" id="b-out" style="margin-left:10px">Sign out</button>
+    </span>
+  </header>
+  <main>
+    <div id="setup-note" class="card hidden">
+      <b>Demo mode — this browser is the database.</b>
+      <div class="hint">Weddings you create here are saved only in this browser (localStorage) and their guest
+      links work on this device. To go online for real guests, paste your Firebase keys into
+      <code>config.js</code> — the panel then uses the realtime cloud automatically.
+      Guide: <code>README-SETUP.md</code>.</div>
+    </div>
+
+    <div class="card" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+      <h2 style="font-size:1.5rem">Your invitations</h2>
+      <button class="btn solid" id="b-new">+ New wedding</button>
+    </div>
+    <div id="w-list"></div>
+    <div class="hint" id="w-empty">No weddings yet — click “New wedding”. A private guest link is generated automatically.</div>
+  </main>
+</div>
+
+<!-- ================= EDITOR ================= -->
+<div id="view-edit" class="hidden">
+  <header class="top">
+    <a class="back" href="#" id="b-back">&larr; All weddings</a>
+    <span class="brand" style="font-size:1.3rem">Edit</span>
+    <span><span class="badge draft" id="e-status">draft</span></span>
+  </header>
+  <main>
+    <div class="card">
+
+      <div class="sect-title">Private guest link</div>
+      <div class="link-box">
+        <code id="e-link">—</code>
+        <button class="btn small" id="b-copy">Copy</button>
+        <button class="btn small" id="b-open">Preview</button>
+      </div>
+      <div class="hint">Share this exact link with your guests. Everyone who has the link sees your wedding live —
+      every change you save updates their screen instantly.</div>
+      <div class="row" style="margin-top:16px">
+        <div>
+          <label>Internal name (only you see this)</label>
+          <input id="f-title" placeholder="Ali & Sara wedding">
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn solid" id="b-save">Save changes</button>
+        <button class="btn" id="b-publish">Publish</button>
+        <button class="btn danger" id="b-revoke">Revoke link</button>
+      </div>
+
+      <div class="sect-title">The couple</div>
+      <div class="grid2">
+        <div>
+          <label>Bride name</label><input id="f-bride">
+          <label>Bride line / quote</label><input id="f-bride-quote">
+        </div>
+        <div>
+          <label>Groom name</label><input id="f-groom">
+          <label>Groom line / quote</label><input id="f-groom-quote">
+        </div>
+      </div>
+
+      <div class="sect-title">Photos</div>
+      <div class="grid2">
+        <div>
+          <div class="up" data-kind="bride"></div>
+          <div class="up" data-kind="groom"></div>
+        </div>
+        <div>
+          <div class="up" data-kind="couple"></div>
+          <div class="up" data-kind="venue-photo"></div>
+        </div>
+      </div>
+
+      <div class="sect-title">Date &amp; time</div>
+      <div class="grid2">
+        <div>
+          <label>Wedding date &amp; time (drives the countdown + calendar)</label>
+          <input id="f-iso" type="datetime-local">
+        </div>
+        <div>
+          <label>Short display date (cover)</label>
+          <div style="display:flex;gap:8px">
+            <input id="f-ddate" placeholder="Saturday · 12 December 2026 · 6:00 PM">
+            <button class="btn small" id="b-fmt" title="Format from the date above" style="flex:none">Auto</button>
+          </div>
+          <label>Long display date (countdown line)</label>
+          <input id="f-ddate2">
+        </div>
+      </div>
+
+      <div class="sect-title">Venue</div>
+      <div class="grid2">
+        <div>
+          <label>Venue name</label><input id="f-venue">
+          <label>Address</label><input id="f-addr">
+        </div>
+        <div>
+          <label>Latitude</label><input id="f-lat" type="number" step="any">
+          <label>Longitude</label><input id="f-lng" type="number" step="any">
+          <div class="hint">Used for the map + “Directions” button (get both from Google Maps).</div>
+        </div>
+      </div>
+
+      <div class="sect-title">Words</div>
+      <label>Welcome / story paragraph</label>
+      <textarea id="f-story"></textarea>
+      <div class="grid2">
+        <div><label>Hashtag</label><input id="f-hash" placeholder="#AliAndSara"></div>
+        <div><label>RSVP deadline</label><input id="f-rsvp" placeholder="1 November 2026"></div>
+      </div>
+
+      <div class="sect-title">Every text line on the invitation</div>
+      <div class="hint">Headings, labels and every paragraph — change any wording you like. Tokens:
+      <b>{deadline}</b> inserts the RSVP date, <b>{name}</b> the guest's name, <b>{guests}</b> their party size.
+      Leave a box empty to keep the built-in default.</div>
+      <div id="f-texts"></div>
+
+      <div class="sect-title">Schedule of the day</div>
+      <div id="f-schedule"></div>
+      <button class="btn small" id="b-add-sch" style="margin-top:10px">+ Add event</button>
+
+      <div class="sect-title">Dress-code colors</div>
+      <div id="f-palette"></div>
+      <button class="btn small" id="b-add-pal" style="margin-top:10px">+ Add color</button>
+
+      <div class="sect-title">Ambience (optional)</div>
+      <div class="hint">Opening card video, background video, and music. Upload files (kept under your private
+      code folder) or paste any direct URL. Leave empty to use the invitation's built-in generated music.</div>
+      <div class="up" data-kind="open-video"></div>
+      <div class="up" data-kind="bg-video"></div>
+      <div class="up" data-kind="music"></div>
+
+      <div class="actions">
+        <button class="btn solid" id="b-save2">Save changes</button>
+        <button class="btn danger" id="b-del">Delete this wedding</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="toast"></div>
+
+<script src="demo-store.js"></script>
+<script src="config.js"></script>
+<script type="module">
+/* =====================================================================
+   WEDDING ADMIN — pure JavaScript + Firebase (Auth / Firestore / Storage)
+   No backend server, no PHP, no SQL. Deploy the folder to Vercel as a
+   static site and this page works.
+   ===================================================================== */
+const $  = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+
+/* ---------- default wedding data (mirrors CONFIG in index.html) ---------- */
+const DEFAULT_DATA = () => ({
+  names: { bride: "Bride", groom: "Groom",
+           brideQuote: "She said yes before the question was finished.",
+           groomQuote: "He has been writing their story since the first hello." },
+  weddingISO: "2026-12-12T18:00:00",
+  displayDate: "Saturday · 12 December 2026 · 6:00 PM",
+  displayDate2: "Saturday · The Twelfth of December · Two Thousand Twenty-Six",
+  hashtag: "#BrideAndGroom",
+  rsvpDeadline: "1 November 2026",
+  story: "Two souls, one duaa — Bride & Groom",
+  venue: { name: "Venue Name", address: "Venue Address, City, Country", lat: 24.7136, lng: 46.6753, photoUrl: "venue.png" },
+  photos: { bride: "bride.png", groom: "groom.png", couple: "couple.png", venue: "venue.png" },
+  media:  { video: "bg.mp4", music: "diyar.mp3", openVideo: "openinv.mp4" },
+  schedule: [
+    { time: "18:00", name: "Ceremony", desc: "Arrival, qiyaf, and the exchange of vows under candlelight." },
+    { time: "19:30", name: "Dinner",   desc: "A seated dinner of dates, saffron rice, and slow-roasted lamb." },
+    { time: "21:30", name: "Dancing",  desc: "The dance floor opens — ulalu, oud, and lights until late." },
+  ],
+  palette: [
+    { name: "Midnight", hex: "#20263c" }, { name: "Burgundy", hex: "#5d1f24" },
+    { name: "Desert Rose", hex: "#b06a62" }, { name: "Sand", hex: "#c9a56f" },
+    { name: "Gold", hex: "#e4c58a" },
+  ],
+  texts: {
+    coverKicker: "Together with their families",
+    heroTag: "request the honour of your presence at their wedding",
+    storyLabel: "Our Story", storyTitle: "A Day Two Hearts Have Prayed For",
+    storyQuote: "And among His signs is that He created for you mates from among yourselves, that you may dwell in tranquillity with them, and He has put love and mercy between your hearts.",
+    storyText2: "With hearts full of gratitude, we joyfully invite you to celebrate the beginning of our forever — an evening of vows, candlelight, laughter, and love.",
+    blessingDua: "بَارَكَ اللَّهُ لَكُمَا وَبَارَكَ عَلَيْكُمَا\nوَجَمَعَ بَيْنَكُمَا فِي خَيْرٍ",
+    blessingTrans: "May Allah bless you both, and May He gather you together in goodness.",
+    coupleLabel: "The Couple", coupleTitle: "Two Halves of One Heart",
+    brideRole: "The Bride", groomRole: "The Groom",
+    ch1Label: "Chapter One", ch1Title: "Two Rings, One Promise",
+    ch2Label: "Chapter Two", ch2Title: "A Heart That Beats as One",
+    ch3Label: "Chapter Three", ch3Title: "Forever, Set in Gold",
+    cdLabel: "Counting Every Blessing", cdTitle: "Until We Say \u201CI Do\u201D",
+    schLabel: "Order of the Day", schTitle: "The Celebration Schedule",
+    venueLabel: "Where Love Will Be Celebrated", venueTitle: "The Venue",
+    ckLabel: "The Sweetest Chapter", ckTitle: "A Celebration Worth Savoring",
+    ckStep1: "The hall is set\u2026", ckStep2: "Tier by tier\u2026",
+    ckStep3: "\u2026layer upon layer of joy.", ckStep4: "One sweet beginning, forever after. \u2665",
+    dressLabel: "Attire", dressTitle: "Dress Code \u2014 Formal Attire",
+    dressLede: "We would be honoured if you wore one of the colours of our evening \u2014 inspired by candlelight, desert roses, and warm gold.",
+    dressNote: "Gentlemen: dark suits or traditional attire \u00B7 Ladies: elegant floor-length gowns",
+    rsvpLabel: "Kindly Reply",
+    rsvpNote: "Please respond by {deadline}. Your presence is our greatest gift.",
+    rsvpOkTitle: "Shukran, {name}",
+    rsvpOkBody: "We noted {guests} place(s) with joy — we cannot wait to celebrate with you.",
+    rsvpOkTitleNo: "We will miss you, {name}",
+    rsvpOkBodyNo: "Thank you for letting us know. You and your duaa will be in our hearts that day.",
+  },
+});
+
+/* ---------- merge helpers (same rules as the guest page) ---------- */
+const isPlainObj = v => v && typeof v === "object" && !Array.isArray(v);
+function cleanEmpty(v){
+  if (!isPlainObj(v)) return v;
+  const out = {};
+  Object.keys(v).forEach(k => {
+    const x = v[k];
+    if (x === "" || x === null || x === undefined) return;
+    out[k] = cleanEmpty(x);
+  });
+  return out;
+}
+function deepMerge(base, over){
+  if (over === undefined || over === null)
+    return (isPlainObj(base) || Array.isArray(base)) ? JSON.parse(JSON.stringify(base)) : base;
+  if (Array.isArray(over)) return JSON.parse(JSON.stringify(over));
+  if (!isPlainObj(over))   return over;
+  const b = isPlainObj(base) ? base : {};
+  const out = {};
+  new Set([...Object.keys(b), ...Object.keys(over)])
+    .forEach(k => { out[k] = deepMerge(b[k], over[k]); });
+  return out;
+}
+/* saved data + built-in defaults (empty saved fields keep the default media/photos) */
+const fullConfig = saved => deepMerge(DEFAULT_DATA(), cleanEmpty(saved || {}));
+
+/* ---------- firebase bootstrap ---------- */
+let fb = null;   // { app, auth, db, sto, fs, st }
+async function initFB(){
+  const [appMod, fs, authMod, st] = await Promise.all([
+    import("https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js"),
+    import("https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js"),
+    import("https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js"),
+    import("https://www.gstatic.com/firebasejs/10.12.5/firebase-storage.js"),
+  ]);
+  const app = appMod.initializeApp(window.FIREBASE_CONFIG);
+  fb = { app, fs, st, fa: authMod, auth: authMod.getAuth(app), db: fs.getFirestore(app), sto: st.getStorage(app) };
+}
+
+/* ---------- ui helpers ---------- */
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+let toastT;
+function toast(msg){ const t = $("#toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 2600); }
+function authMsg(msg, ok){ const m = $("#a-msg"); m.textContent = msg; m.className = msg ? "msg " + (ok ? "ok" : "err") : "msg"; }
+function busy(on){ $$(".btn").forEach(b => b.disabled = !!on); }
+function showView(v){ ["auth","app","edit"].forEach(x => $(`#view-${x}`).classList.toggle("hidden", x !== v)); }
+function genCode(){ const c = "abcdefghjkmnpqrstuvwxyz23456789"; let s = "";
+  const r = new Uint32Array(16); crypto.getRandomValues(r);
+  for (let i = 0; i < 16; i++) s += c[r[i] % c.length]; return s; }
+const guestLink = code => `${location.origin}/?code=${code}`;
+
+/* ---------- state ---------- */
+let user = null;
+let DEMO_MODE = false;    // true when Firebase keys are not pasted → localStorage testing
+let weddings = [];        // live list
+let current = null;       // wedding being edited: { code, title, status, config }
+let unsubList = null, unsubDoc = null;
+
+/* =====================================================================
+   AUTH
+   ===================================================================== */
+async function signIn(){
+  busy(true); authMsg("");
+  try {
+    if (DEMO_MODE) return demoLogin();
+    await fb.fa.signInWithEmailAndPassword(fb.auth, $("#a-email").value.trim(), $("#a-pass").value);
+  }
+  catch (e) {
+    const code = String(e.code || "");
+    if (code.includes("user-not-found") || code.includes("invalid-credential") || code.includes("wrong-password"))
+      authMsg("Wrong email or password. Admin accounts are created by the owner in the Firebase console (Authentication → Users → Add user) — there is no public sign-up.");
+    else authMsg("Sign in failed: " + e.message.replace("Firebase: ", ""));
+  }
+  busy(false);
+}
+function demoLogin(){
+  const email = $("#a-email").value.trim();
+  if (!/^\S+@\S+\.\S+$/.test(email)) { busy(false); return authMsg("Enter a valid email (any email works in demo mode)."); }
+  if ($("#a-pass").value.length < 4) { busy(false); return authMsg("Password needs at least 4 characters."); }
+  user = { uid: "local-demo", email };
+  $("#u-email").textContent = email + " · demo";
+  busy(false);
+  showView("app");
+  $("#setup-note").classList.remove("hidden");
+  watchList();
+}
+
+$("#a-in").onclick  = signIn;
+$("#a-pass").addEventListener("keydown", e => e.key === "Enter" && signIn());
+$("#b-out").onclick = () => DEMO_MODE ? afterSignOut() : fb.fa.signOut(fb.auth);
+
+/* =====================================================================
+   WEDDING LIST (realtime)
+   ===================================================================== */
+function watchList(){
+  if (DEMO_MODE){
+    weddings = window.DEMO.list();
+    renderList();
+    /* storage event = another tab saved → refresh instantly */
+    window.addEventListener("storage", e => {
+      if (e.key === window.DEMO.KEY){ weddings = window.DEMO.list(); renderList(); }
+    });
+    return;
+  }
+  const { fs } = fb;
+  unsubList?.();
+  const q = fs.query(fs.collection(fb.db, "weddings"), fs.where("ownerUid", "==", user.uid));
+  unsubList = fs.onSnapshot(q, snap => {
+    weddings = snap.docs.map(d => ({ code: d.id, ...d.data() }));
+    renderList();
+  }, err => toast("List error: " + err.message));
+}
+
+function renderList(){
+  const box = $("#w-list");
+  box.innerHTML = weddings.map(w => {
+    const n = (w.config && w.config.names) || {};
+    return `<div class="w-item">
+      <div class="meta"><b>${esc(n.bride || "?")} &amp; ${esc(n.groom || "?")}</b>
+        <span>${esc(w.title || "")} · link code ${esc(w.code.slice(0, 6))}…</span></div>
+      <span class="badge ${esc(w.status)}">${esc(w.status)}</span>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn small" data-a="edit" data-c="${w.code}">Edit</button>
+        <button class="btn small" data-a="open" data-c="${w.code}">Open invite</button>
+        <button class="btn small" data-a="copy" data-c="${w.code}">Copy link</button>
+      </div>
+    </div>`;
+  }).join("");
+  $("#w-empty").style.display = weddings.length ? "none" : "block";
+}
+
+$("#w-list").addEventListener("click", e => {
+  const b = e.target.closest("button[data-a]"); if (!b) return;
+  const w = weddings.find(x => x.code === b.dataset.c); if (!w) return;
+  if (b.dataset.a === "edit") openEditor(w.code);
+  if (b.dataset.a === "open") window.open(guestLink(w.code), "_blank");
+  if (b.dataset.a === "copy") copy(guestLink(w.code));
+});
+
+async function newWedding(){
+  busy(true);
+  try {
+    const code = DEMO_MODE ? "demo-" + Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 6)
+                           : genCode();
+    const data = { title: "New wedding", ownerUid: user.uid, status: "draft",
+                   createdAt: DEMO_MODE ? Date.now() : fb.fs.serverTimestamp(), config: DEFAULT_DATA() };
+    if (DEMO_MODE) window.DEMO.put(code, data);
+    else await fb.fs.setDoc(fb.fs.doc(fb.db, "weddings", code), data);
+    openEditor(code);
+    toast("Wedding created — private link ready ✔");
+  } catch (e) { toast("Could not create: " + e.message); }
+  busy(false);
+}
+$("#b-new").onclick = newWedding;
+
+function copy(text){
+  navigator.clipboard.writeText(text).then(() => toast("Link copied ✔"),
+    () => { prompt("Copy this link:", text); });
+}
+
+/* =====================================================================
+   EDITOR
+   ===================================================================== */
+function setInputs(c){
+  $("#f-title").value      = current.title || "";
+  $("#f-bride").value      = c.names.bride || "";
+  $("#f-groom").value      = c.names.groom || "";
+  $("#f-bride-quote").value= c.names.brideQuote || "";
+  $("#f-groom-quote").value= c.names.groomQuote || "";
+  $("#f-iso").value        = (c.weddingISO || "").slice(0, 16);
+  $("#f-ddate").value      = c.displayDate || "";
+  $("#f-ddate2").value     = c.displayDate2 || "";
+  $("#f-hash").value       = c.hashtag || "";
+  $("#f-rsvp").value       = c.rsvpDeadline || "";
+  $("#f-story").value      = c.story || "";
+  $("#f-venue").value      = c.venue.name || "";
+  $("#f-addr").value       = c.venue.address || "";
+  $("#f-lat").value        = c.venue.lat ?? "";
+  $("#f-lng").value        = c.venue.lng ?? "";
+  renderSchedule(); renderPalette(); renderUploads();
+  renderTexts();
+  TEXT_DEFS.forEach(d => { const el = tkEl(d[0]); if (el) el.value = (c.texts || {})[d[0]] || ""; });
+  $("#e-status").textContent = current.status;
+  $("#e-status").className   = "badge " + current.status;
+  $("#e-link").textContent   = guestLink(current.code);
+  $("#b-publish").textContent = current.status === "published" ? "Unpublish (draft)" : "Publish";
+}
+
+function collect(){
+  const c = current.config;
+  c.names.bride = $("#f-bride").value.trim();
+  c.names.groom = $("#f-groom").value.trim();
+  c.names.brideQuote = $("#f-bride-quote").value.trim();
+  c.names.groomQuote = $("#f-groom-quote").value.trim();
+  if ($("#f-iso").value) c.weddingISO = $("#f-iso").value + ":00";
+  c.displayDate  = $("#f-ddate").value.trim();
+  c.displayDate2 = $("#f-ddate2").value.trim();
+  c.hashtag      = $("#f-hash").value.trim();
+  c.rsvpDeadline = $("#f-rsvp").value.trim();
+  c.story        = $("#f-story").value.trim();
+  c.venue.name   = $("#f-venue").value.trim();
+  c.venue.address= $("#f-addr").value.trim();
+  c.venue.lat    = parseFloat($("#f-lat").value) || 0;
+  c.venue.lng    = parseFloat($("#f-lng").value) || 0;
+  c.schedule = $$("#f-schedule .rep").map(r => ({
+    time: r.querySelector(".s-time").value.trim(),
+    name: r.querySelector(".s-name").value.trim(),
+    desc: r.querySelector(".s-desc").value.trim(),
+  })).filter(s => s.name);
+  c.palette = $$("#f-palette .rep").map(r => ({
+    name: r.querySelector(".p-name").value.trim(),
+    hex:  r.querySelector(".p-hex").value,
+  })).filter(p => p.name);
+  c.texts = {};
+  TEXT_DEFS.forEach(d => { const el = tkEl(d[0]); if (el) c.texts[d[0]] = el.value.trim(); });
+  current.title = $("#f-title").value.trim() || `${c.names.bride} & ${c.names.groom}`;
+}
+
+/* ---- schedule / palette repeaters ---- */
+function renderSchedule(){
+  $("#f-schedule").innerHTML = current.config.schedule.map((s, i) => `
+    <div class="rep" data-i="${i}">
+      <input class="s-time" type="time" value="${esc(s.time)}">
+      <input class="s-name" placeholder="Ceremony" value="${esc(s.name)}">
+      <input class="s-desc" placeholder="Description" value="${esc(s.desc)}">
+      <button data-del title="Remove">✕</button>
+    </div>`).join("");
+}
+function renderPalette(){
+  $("#f-palette").innerHTML = current.config.palette.map((p, i) => `
+    <div class="rep c" data-i="${i}">
+      <input class="p-name" placeholder="Midnight" value="${esc(p.name)}">
+      <input class="p-hex" type="color" value="${esc(p.hex || "#e4c58a")}">
+      <button data-del title="Remove">✕</button>
+    </div>`).join("");
+}
+$("#b-add-sch").onclick = () => { collect(); current.config.schedule.push({ time: "18:00", name: "", desc: "" });
+  renderSchedule(); $("#f-schedule").lastElementChild?.querySelector("input")?.focus(); };
+$("#b-add-pal").onclick = () => { collect(); current.config.palette.push({ name: "", hex: "#e4c58a" }); renderPalette(); };
+$("#f-schedule").addEventListener("click", e => { if (e.target.dataset.del !== undefined){ collect();
+  current.config.schedule.splice(+e.target.closest(".rep").dataset.i, 1); renderSchedule(); } });
+$("#f-palette").addEventListener("click", e => { if (e.target.dataset.del !== undefined){ collect();
+  current.config.palette.splice(+e.target.closest(".rep").dataset.i, 1); renderPalette(); } });
+
+/* ---- every editable text line (generated from one definition list) ---- */
+const TEXT_DEFS = [
+  ["coverKicker",   "Cover — line above the names", 0],
+  ["heroTag",       "Hero — line under the names", 0],
+  ["storyLabel",    "Story — small label", 0],
+  ["storyTitle",    "Story — title", 0],
+  ["storyQuote",    "Story — opening quote (verse)", 1],
+  ["storyText2",    "Story — second paragraph", 1],
+  ["blessingDua",   "Blessing — Arabic duaa (Enter = new line)", 1],
+  ["blessingTrans", "Blessing — English translation", 1],
+  ["coupleLabel",   "Couple — small label", 0],
+  ["coupleTitle",   "Couple — title", 0],
+  ["brideRole",     "Bride caption (The Bride)", 0],
+  ["groomRole",     "Groom caption (The Groom)", 0],
+  ["ch1Label",      "3D rings — chapter 1 label", 0],
+  ["ch1Title",      "3D rings — chapter 1 title", 0],
+  ["ch2Label",      "3D rings — chapter 2 label", 0],
+  ["ch2Title",      "3D rings — chapter 2 title", 0],
+  ["ch3Label",      "3D rings — chapter 3 label", 0],
+  ["ch3Title",      "3D rings — chapter 3 title", 0],
+  ["cdLabel",       "Countdown — small label", 0],
+  ["cdTitle",       "Countdown — title", 0],
+  ["schLabel",      "Schedule — small label", 0],
+  ["schTitle",      "Schedule — title", 0],
+  ["venueLabel",    "Venue — small label", 0],
+  ["venueTitle",    "Venue — title", 0],
+  ["ckLabel",       "Cake scene — small label", 0],
+  ["ckTitle",       "Cake scene — title", 0],
+  ["ckStep1",       "Cake scene — line 1", 0],
+  ["ckStep2",       "Cake scene — line 2", 0],
+  ["ckStep3",       "Cake scene — line 3", 0],
+  ["ckStep4",       "Cake scene — line 4", 0],
+  ["dressLabel",    "Dress code — small label", 0],
+  ["dressTitle",    "Dress code — title", 0],
+  ["dressLede",     "Dress code — paragraph", 1],
+  ["dressNote",     "Dress code — note line", 0],
+  ["rsvpLabel",     "RSVP — small label", 0],
+  ["rsvpNote",      "RSVP — note  (use {deadline} for the date)", 1],
+  ["rsvpOkTitle",   "RSVP thank-you — title  ({name})", 0],
+  ["rsvpOkBody",    "RSVP thank-you — message  ({name} {guests})", 1],
+  ["rsvpOkTitleNo", "RSVP decline — title  ({name})", 0],
+  ["rsvpOkBodyNo",  "RSVP decline — message", 1],
+];
+const tkEl = k => $(`#f-texts [data-tk="${k}"]`);
+function renderTexts(){
+  $("#f-texts").innerHTML = TEXT_DEFS.map(d =>
+    `<div class="tk${d[2] ? " wide" : ""}"><label>${d[1]}</label>${
+      d[2] ? `<textarea data-tk="${d[0]}" rows="2"></textarea>` : `<input data-tk="${d[0]}">`
+    }</div>`).join("");
+}
+
+/* ---- upload widgets (photos + media) ---- */
+const UP_DEFS = {
+  "bride":       { label: "Bride photo",      accept: "image/*",  get: c => c.photos.bride,        set: (c, u) => c.photos.bride = u },
+  "groom":       { label: "Groom photo",      accept: "image/*",  get: c => c.photos.groom,        set: (c, u) => c.photos.groom = u },
+  "couple":      { label: "Couple photo (card + footer)", accept: "image/*", get: c => c.photos.couple, set: (c, u) => c.photos.couple = u },
+  "venue-photo": { label: "Venue photo",      accept: "image/*",  get: c => c.venue.photoUrl,      set: (c, u) => { c.venue.photoUrl = u; c.photos.venue = u; } },
+  "open-video":  { label: "Opening card video", accept: "video/*", get: c => c.media.openVideo,    set: (c, u) => c.media.openVideo = u },
+  "bg-video":    { label: "Background video", accept: "video/*",  get: c => c.media.video,         set: (c, u) => c.media.video = u },
+  "music":       { label: "Music track",      accept: "audio/*",  get: c => c.media.music,         set: (c, u) => c.media.music = u },
+};
+
+function renderUploads(){
+  $$(".up[data-kind]").forEach(box => {
+    const def = UP_DEFS[box.dataset.kind];
+    const url = def.get(current.config) || "";
+    const isImg = box.dataset.kind === "bride" || box.dataset.kind === "groom" ||
+                  box.dataset.kind === "couple" || box.dataset.kind === "venue-photo";
+    box.innerHTML = `
+      ${isImg
+        ? (url ? `<img src="${esc(url)}" class="prev">` : `<div class="ph">✦</div>`)
+        : `<div class="ph" style="width:64px">${box.dataset.kind === "music" ? "♪" : "▶"}</div>`}
+      <div class="grow">
+        <input type="file" accept="${def.accept}" class="file">
+        <input type="text" placeholder="…or paste a direct URL" class="urlin" value="${esc(url)}">
+      </div>
+      ${url ? `<button class="btn small danger up-clear">✕</button>` : ""}`;
+  });
+}
+$$(".up[data-kind]").forEach(box => {           // delegated events (innerHTML is re-rendered)
+  box.addEventListener("change", async e => {
+    const f = e.target.files?.[0]; if (!f) return;
+    const def = UP_DEFS[box.dataset.kind];
+    box.querySelector(".file").disabled = true;
+    toast(`Uploading ${f.name}…`);
+    try {
+      collect();
+      let url;
+      if (DEMO_MODE){
+        url = await window.demoShrink(f, 1400);
+        if (url.indexOf("blob:") === 0) toast("Video/audio kept for this browser session only — use Firebase mode for real hosting");
+      } else {
+        /* Cloudinary (free, no card): unsigned upload straight from the browser.
+           Configure window.CLOUDINARY in config.js. */
+        const cl = window.CLOUDINARY || {};
+        const ready = cl.cloudName && cl.uploadPreset &&
+                      cl.cloudName.indexOf("PASTE") === -1 && cl.uploadPreset.indexOf("PASTE") === -1;
+        if (!ready) throw new Error("Add your Cloudinary cloud name + unsigned preset to config.js — or paste a direct URL instead");
+        let kind = "image";
+        if (f.type.indexOf("video") === 0 || f.type.indexOf("audio") === 0) kind = "video";
+        const fd = new FormData();
+        fd.append("file", f);
+        fd.append("upload_preset", cl.uploadPreset);
+        fd.append("folder", "eventsinvite/" + current.code + "/" + box.dataset.kind);
+        const res = await fetch(`https://api.cloudinary.com/v1_1/${cl.cloudName}/${kind}/upload`,
+                                { method: "POST", body: fd });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok || !j.secure_url) throw new Error(j.error && j.error.message || "Cloudinary HTTP " + res.status);
+        url = j.secure_url;
+      }
+      def.set(current.config, url);
+      renderUploads(); toast("Uploaded ✔ (remember to Save)");
+    } catch (err) { toast("Upload failed: " + err.message); renderUploads(); }
+    box.querySelector(".file") && (box.querySelector(".file").disabled = false);
+  });
+  box.addEventListener("input", e => {
+    if (!e.target.classList.contains("urlin")) return;
+    collect(); UP_DEFS[box.dataset.kind].set(current.config, e.target.value.trim());
+  });
+  box.addEventListener("click", e => {
+    if (!e.target.classList.contains("up-clear")) return;
+    collect(); UP_DEFS[box.dataset.kind].set(current.config, ""); renderUploads();
+  });
+});
+
+/* ---- auto display date ---- */
+$("#b-fmt").onclick = () => {
+  const d = new Date($("#f-iso").value);
+  if (isNaN(d)) return toast("Pick the date & time first");
+  const days = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  const mons = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  let h = d.getHours(); const ap = h >= 12 ? "PM" : "AM"; h = h % 12 || 12;
+  const t = `${h}:${String(d.getMinutes()).padStart(2, "0")} ${ap}`;
+  $("#f-ddate").value  = `${days[d.getDay()]} · ${d.getDate()} ${mons[d.getMonth()]} ${d.getFullYear()} · ${t}`;
+  $("#f-ddate2").value = `${days[d.getDay()]} · The ${ord(d.getDate())} of ${mons[d.getMonth()]} · ${numWords(d.getFullYear())}`;
+};
+const ord = n => ({ 1:"First",2:"Second",3:"Third",4:"Fourth",5:"Fifth",6:"Sixth",7:"Seventh",8:"Eighth",9:"Ninth",
+  10:"Tenth",11:"Eleventh",12:"Twelfth",13:"Thirteenth",14:"Fourteenth",15:"Fifteenth",16:"Sixteenth",17:"Seventeenth",
+  18:"Eighteenth",19:"Nineteenth",20:"Twentieth",21:"Twenty-first",22:"Twenty-second",23:"Twenty-third",
+  24:"Twenty-fourth",25:"Twenty-fifth",26:"Twenty-sixth",27:"Twenty-seventh",28:"Twenty-eighth",
+  29:"Twenty-ninth",30:"Thirtieth",31:"Thirty-first" }[n] || n + "th");
+const numWords = y => {
+  const u = ["Zero","One","Two","Three","Four","Five","Six","Seven","Eight","Nine","Ten","Eleven","Twelve","Thirteen","Fourteen","Fifteen","Sixteen","Seventeen","Eighteen","Nineteen"];
+  const t = ["","","Twenty","Thirty","Forty","Fifty","Sixty","Seventy","Eighty","Ninety"];
+  const tens = n => n < 20 ? u[n] : t[Math.floor(n / 10)] + (n % 10 ? "-" + u[n % 10] : "");
+  let s = "", r = y;
+  if (r >= 1000){ s += u[Math.floor(r / 1000)] + " Thousand"; r %= 1000; }
+  if (r >= 100 ){ s += (s ? " " : "") + u[Math.floor(r / 100)] + " Hundred"; r %= 100; }
+  if (r       ){ s += (s ? " " : "") + tens(r); }
+  return s;
+};
+
+/* ---- open editor with realtime doc ---- */
+async function openEditor(code){
+  if (DEMO_MODE){
+    const w = window.DEMO.get(code);
+    if (!w) { toast("Wedding not found"); showView("app"); return; }
+    current = { code, ...w };
+    current.config = fullConfig(current.config);
+    setInputs(current.config);
+    showView("edit");
+    return;
+  }
+  const { fs } = fb;
+  unsubDoc?.();
+  const snap = await fs.getDoc(fs.doc(fb.db, "weddings", code));
+  if (!snap.exists()) { toast("Wedding not found"); showView("app"); return; }
+  current = { code, ...snap.data() };
+  current.config = fullConfig(current.config);
+  setInputs(current.config);
+  showView("edit");
+  /* live sync: if another device saves changes, reflect them here when idle */
+  unsubDoc = fs.onSnapshot(fs.doc(fb.db, "weddings", code), s => {
+    if (s.exists() && !document.hasFocus()) { current = { code, ...s.data() };
+      current.config = fullConfig(current.config); setInputs(current.config); }
+  });
+}
+$("#b-back").onclick = e => { e.preventDefault(); unsubDoc?.(); current = null; showView("app"); };
+$("#e-link").parentElement.addEventListener("dblclick", () => current && copy(guestLink(current.code)));
+$("#b-copy").onclick = () => current && copy(guestLink(current.code));
+$("#b-open").onclick = () => current && window.open(guestLink(current.code), "_blank");
+
+async function save(status){
+  if (!current) return;
+  busy(true);
+  try {
+    collect();
+    if (status) { current.status = status;
+      $("#e-status").textContent = status; $("#e-status").className = "badge " + status;
+      $("#b-publish").textContent = status === "published" ? "Unpublish (draft)" : "Publish"; }
+    if (DEMO_MODE){
+      window.DEMO.put(current.code, { title: current.title, status: current.status, config: current.config });
+    } else {
+      const { fs } = fb;
+      await fs.updateDoc(fs.doc(fb.db, "weddings", current.code),
+        { title: current.title, status: current.status, config: current.config, updatedAt: fs.serverTimestamp() });
+    }
+    toast(status ? `Wedding ${status}! ${status === "published" ? "Share the link with guests ✔" : ""}` : "Saved ✔ changes are live for guests instantly");
+  } catch (e) { toast("Save failed: " + e.message); }
+  busy(false);
+}
+$("#b-save").onclick  = () => save(null);
+$("#b-save2").onclick = () => save(null);
+$("#b-publish").onclick = () => save(current.status === "published" ? "draft" : "published");
+$("#b-revoke").onclick = async () => {
+  if (!current) return;
+  if (!confirm("Revoke this link? Guests with the old link will be locked out. You can create a new wedding for a fresh link.")) return;
+  await save("revoked");
+};
+$("#b-del").onclick = async () => {
+  if (!current) return;
+  if (!confirm("Delete this wedding permanently?")) return;
+  busy(true);
+  try {
+    if (DEMO_MODE) window.DEMO.del(current.code);
+    else await fb.fs.deleteDoc(fb.fs.doc(fb.db, "weddings", current.code));
+    toast("Wedding deleted");
+    unsubDoc?.(); current = null; showView("app");
+  } catch (e) { toast("Delete failed: " + e.message); }
+  busy(false);
+};
+
+/* =====================================================================
+   SESSION
+   ===================================================================== */
+function afterSignOut(){
+  weddings = []; current = null;
+  unsubList?.(); unsubDoc?.(); unsubList = unsubDoc = null;
+  $("#setup-note").classList.add("hidden");
+  showView("auth");
+}
+
+(async function main(){
+  if (!window.isFirebaseConfigured()){
+    /* No Firebase keys yet → DEMO MODE: the login form and the whole admin
+       flow work locally (browser storage), so you can test everything now. */
+    DEMO_MODE = true;
+    $("#auth-banner").classList.remove("hidden");
+    showView("auth");
+    return;
+  }
+  try { await initFB(); }
+  catch (e) { $("#a-msg").textContent = "Firebase init failed: " + e.message; $("#a-msg").className = "msg err"; return; }
+
+  fb.fa.onAuthStateChanged(fb.auth, u => {
+    user = u;
+    if (!u) return afterSignOut();
+    $("#u-email").textContent = u.email;
+    showView("app");
+    watchList();
+  });
+})();
+</script>
+</body>
+</html>

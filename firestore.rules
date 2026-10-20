@@ -1,0 +1,32 @@
+rules_version = '2';
+
+/* =====================================================================
+   FIRESTORE RULES — Firebase console → Build → Firestore Database →
+   Rules tab → paste everything below → Publish.
+
+   One wedding = one document in collection "weddings".
+   The document id IS the private guest code (e.g. k3f9xz2m7qwp4t8b).
+   Nobody can list or guess codes — you must have the exact link.
+   ===================================================================== */
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /weddings/{code} {
+
+      /* Guests with the exact private link can read that one document. */
+      allow get: if true;
+
+      /* Admins can only ever list their OWN weddings
+         (the admin app always filters by ownerUid). */
+      allow list: if request.auth != null
+                  && resource.data.ownerUid == request.auth.uid;
+
+      /* Only the signed-in owner can create / edit / delete. */
+      allow create: if request.auth != null
+                    && request.resource.data.ownerUid == request.auth.uid;
+
+      allow update, delete: if request.auth != null
+                    && resource.data.ownerUid == request.auth.uid
+                    && request.resource.data.ownerUid == request.auth.uid;
+    }
+  }
+}

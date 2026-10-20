@@ -1,0 +1,20 @@
+rules_version = '2';
+
+/* =====================================================================
+   STORAGE RULES — Firebase console → Build → Storage → Rules tab →
+   paste everything below → Publish.
+
+   Photos / videos / music are stored under weddings/<code>/...
+   The unguessable code folder is the "password" for guests;
+   only the signed-in owner of that wedding can upload.
+   ===================================================================== */
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /weddings/{code}/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null
+                   && firestore.get(/databases/(default)/documents/weddings/$(code))
+                        .data.ownerUid == request.auth.uid;
+    }
+  }
+}

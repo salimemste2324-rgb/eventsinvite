@@ -66,22 +66,45 @@ browser session. The moment you paste real Firebase keys into
   paste, **Publish** — then a confirmation popup appears, click
   **Publish** again. (Two clicks. If you only click once the old rules
   stay live and uploads/deletes fail with "insufficient permissions".)
+- **Easiest way (terminal, no console clicking):** open a terminal in this
+  folder and run:
+  `firebase login` (sign in with your Google account in the browser that
+  opens), then `firebase deploy --only firestore:rules --project eventsinvie`.
+  It prints `+ Deployed Firestore rules successfully.` — done, no
+  double-publish popup needed. (`firebase.json` in this folder points it
+  at `firestore.rules`.)
 - Re-check after every update to `firestore.rules`: the rules tab shows
   the last **published** version, not what's in the editor box.
 
 ## Part 2b · Uploads — no Storage, no card, nothing to enable
 
 Everything the admin uploads lives inside **Firestore** (the free Spark
-plan, no bucket, no Blaze, no credit card):
+plan, no bucket, no Blaze, no credit card). The file picker works in two
+modes and it switches automatically — you never have to choose:
 
-- **Photos** (bride / groom / couple / venue) are compressed in the
-  browser and stored as a collection of one document per picture at
-  `weddings/<code>/assets/<slot>/photos/<id>` — uploading more photos
-  ADDS to the collection, each photo has its own ✕ delete button, and
-  nothing ever replaces an existing photo.
-- **Music**: upload any mp3 up to 4 MB — it is split into small chunks
-  under `weddings/<code>/assets/music/chunks/…` and guests reassemble it
-  automatically. You can also paste a direct audio URL instead.
+- **Mode A · full size (needs Part 2 rules published).** Photos
+  (bride / groom / couple / venue) are compressed in the browser and
+  stored as one document per picture at
+  `weddings/<code>/assets/<slot>/photos/<id>` — uploading more photos ADDS
+  to the collection, every photo has its own ✕, and nothing ever replaces
+  an existing one. Music: any mp3 up to 4 MB, split into chunks under
+  `weddings/<code>/assets/music/chunks/…`, reassembled by guests.
+- **Mode B · inside the invitation (works with the rules as they are
+  today).** If Firestore refuses the `assets/…` write — or before you have
+  published Part 2 — the same picture is stored **inside the wedding
+  document itself** (`config.embed`) and the photo fields point at it. The
+  upload still succeeds, the guest page still shows it, and Save still
+  works, because writing the wedding document is the write the admin has
+  always been allowed to do. Photos are kept compact (about 200 KB each,
+  ~850 KB of pictures + music fit in one wedding) and the newest picture
+  of a slot is the one shown.
+  In this mode an mp3 has to fit in that same space: **up to ≈600 KB**, so
+  use a short/low-bitrate clip or paste a direct audio URL. Publishing
+  Part 2 lifts that to the full 4 MB.
+
+Every upload is confirmed against the **server** after it is written, so a
+refusal can never look like a success — it just falls back to Mode B.
+
 - **Videos** (opening card + background) are **built into the invitation
   and locked** — they always stay as shipped and cannot be edited or
   uploaded, so there is nothing else to configure anywhere.

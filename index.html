@@ -2753,6 +2753,22 @@ function deepMerge(base, over){
   return out;
 }
 
+/* Pictures / music the organiser uploaded while the Firestore rules were
+   not published yet are stored INSIDE the wedding document (config.embed)
+   and the fields just point at them with "embed:<slot>". Swap the pointer
+   for the real data here — nothing else needs to know about it. */
+function resolveEmbedded(d){                    // raw config → real data in place of "embed:" pointers
+  const map = (d && d.embed) || {};
+  const swap = (o, k) => { const v = String((o && o[k]) || "");
+    if (v.indexOf("embed:") !== 0) return;
+    const slot = v.slice(6);
+    o[k] = map[slot] || map[slot.replace("-photo", "")] || ""; };   // "" → bundled default fills in
+  if (d.photos) ["bride", "groom", "couple", "venue"].forEach(k => swap(d.photos, k));
+  if (d.venue)  swap(d.venue, "photoUrl");
+  if (d.media)  swap(d.media, "music");
+  return d;
+}
+
 /* full-screen polite message for bad/missing links */
 function showGate(msg){
   window.__gateShown = true;
@@ -2780,7 +2796,7 @@ window.__inviteBridge = {
   demo(){ settleInvite(); },                                   // no code + no config → local demo
   fail(msg){ if (window.__gateShown) return; showGate(msg); settleInvite(); },  // invalid / missing private link
   data(d){                                                     // live wedding data (also realtime updates)
-    CONFIG = deepMerge(DEFAULT_CONFIG, cleanEmpty(d || {}));
+    CONFIG = deepMerge(DEFAULT_CONFIG, cleanEmpty(resolveEmbedded(d || {})));
     recomputeIdentity();
     if (window.__bootDone){                                    // realtime refresh after boot
       fillContent();

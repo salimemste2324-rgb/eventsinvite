@@ -678,30 +678,114 @@ let MUSIC_BLOB = "";                         // ready audio URL of the uploaded 
 const PHOTO_SLOTS = ["bride", "groom", "couple", "venue-photo"];
 const isPhotoSlot = k => PHOTO_SLOTS.indexOf(k) !== -1;
 let ASSETS = {};   // slot -> [{ id, dataUrl }], loaded when a wedding is opened
+/* two storages share one marker system:
+   "asset:<slot>" → separate photo document (needs the published rules)
+   "embed:<slot>" → picture kept inside the wedding document itself       */
+const isMarker = s => String(s || "").indexOf("asset:") === 0 || String(s || "").indexOf("embed:") === 0;
+let ASSET_WRITE_DENIED = false;   // set once a rules refusal is seen → go straight to embed
 
-function compressImage(file, maxKB){
+function compressImage(file, maxKB, maxDim, minDim){
   return new Promise((resolve, reject) => {
     const objUrl = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
       URL.revokeObjectURL(objUrl);
       const c = document.createElement("canvas");
-      let dim = 1280;
+      let dim = maxDim || 1280;
+      const floor = minDim || 640;
       (function step(){
         const sc = Math.min(1, dim / Math.max(img.width, img.height));
         c.width = Math.round(img.width * sc); c.height = Math.round(img.height * sc);
         c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-        for (const q of [.82, .72, .6, .5]){
+        for (const q of [.82, .72, .6, .5, .4, .32]){
           const d = c.toDataURL("image/jpeg", q);
           if (d.length * .75 < maxKB * 1024) return resolve(d);
         }
-        if (dim > 640){ dim = Math.round(dim * .72); step(); }
-        else resolve(c.toDataURL("image/jpeg", .5));
+        if (dim > floor){ dim = Math.round(dim * .72); step(); }
+        else resolve(c.toDataURL("image/jpeg", .28));
       })();
     };
     img.onerror = () => { URL.revokeObjectURL(objUrl); reject(new Error("Could not read the image file")); };
     img.src = objUrl;
   });
+}
+
+/* ---- EMBEDDED fallback: the picture lives inside the wedding document.
+   Updating the wedding doc is already permitted (that is how Save works),
+   so the file-picker works even before any Firestore rules are published.
+   One copy of every picture is kept in config.embed, and the photo fields
+   just point at it — that keeps the document under Firestore's 1 MiB cap. */
+const DOC_LIMIT_BYTES = 900 * 1024;
+const docBytes = o => { try { return new Blob([JSON.stringify(o)]).size; } catch (e) { return Infinity; } };
+function recompressDataUrl(src, maxKB, dim){
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement("canvas");
+      const sc = Math.min(1, dim / Math.max(img.width, img.height));
+      c.width = Math.round(img.width * sc); c.height = Math.round(img.height * sc);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      for (const q of [.7, .55, .42, .32, .24]){
+        const d = c.toDataURL("image/jpeg", q);
+        if (d.length < maxKB * 1024) return resolve(d);
+      }
+      resolve(c.toDataURL("image/jpeg", .2));
+    };
+    img.onerror = () => resolve(src);
+    img.src = src;
+  });
+}
+/* shrink every embedded picture a notch at a time until the whole wedding
+   document fits in Firestore; returns false when it still cannot fit */
+async function fitDocBudget(){
+  if (!current || !current.config.embed) return docBytes(current.config) <= DOC_LIMIT_BYTES;
+  const keys = Object.keys(current.config.embed);
+  for (const dim of [860, 700, 560, 440, 340, 260]){
+    const per = Math.floor((DOC_LIMIT_BYTES - (docBytes(current.config) -
+              keys.reduce((t, k) => t + current.config.embed[k].length, 0))) / Math.max(1, keys.length) / 1.37 / 1024);
+    for (const k of keys)
+      current.config.embed[k] = await recompressDataUrl(current.config.embed[k], Math.max(45, per), dim);
+    if (docBytes(current.config) <= DOC_LIMIT_BYTES) return true;
+  }
+  return false;
+}
+const fileToDataUrl = file => new Promise((resolve, reject) => {
+  const r = new FileReader();
+  r.onload = () => resolve(String(r.result));
+  r.onerror = () => reject(new Error("could not read the file"));
+  r.readAsDataURL(file);
+});
+/* room left in the document for embedded pictures (text etc. is tiny) */
+const EMBED_POOL = 860 * 1024;
+function embedBytes(cfg){ let t = 0; const m = (cfg && cfg.embed) || {};
+  Object.keys(m).forEach(k => t += String(m[k] || "").length); return t; }
+async function embedPhoto(kind, file){
+  if (!current.config.embed) current.config.embed = {};
+  const others = Object.keys(current.config.embed).filter(k => k !== kind);
+  const room = Math.max(60, Math.floor((EMBED_POOL - embedBytes(current.config)) / 1024 / 1.37));
+  const dataUrl = await compressImage(file, Math.min(220, room), 720, 320);
+  current.config.embed[kind] = dataUrl;
+  if (!await fitDocBudget()){
+    others.concat([kind]).forEach(k => { if (embedBytes(current.config) > EMBED_POOL) delete current.config.embed[k]; });
+    if (!await fitDocBudget()){
+      delete current.config.embed[kind];
+      throw new Error("the invitation is full — delete an old photo first (about 850 KB of pictures fit in one wedding)");
+    }
+  }
+  ASSETS[kind] = [{ id: "embed", dataUrl }];
+  return "embed:" + kind;
+}
+async function embedAudio(kind, file){
+  if (!current.config.embed) current.config.embed = {};
+  const room = EMBED_POOL - embedBytes(current.config);
+  if (file.size * 1.37 > room)
+    throw new Error(`not enough room left in the invitation (${Math.round(room / 1024)} KB) — delete a photo, or use a shorter mp3`);
+  current.config.embed[kind] = await fileToDataUrl(file);
+  if (docBytes(current.config) > DOC_LIMIT_BYTES){
+    delete current.config.embed[kind];
+    throw new Error("the invitation is full — delete a photo to free space for the music");
+  }
+  return "embed:" + kind;
 }
 
 function bufToDataUrl(buf){
@@ -737,6 +821,27 @@ async function uploadMusicChunked(code, blob, onProgress){
   await fs.setDoc(fs.doc(fb.db, "weddings", code, "assets", "music"),
                   { manifest: true, chunks: total, mime: blob.type || "audio/mpeg",
                     updatedAt: fb.fs.serverTimestamp() });
+  await confirmAssetWrite("music", "chunks/0");   // the server must actually hold it
+}
+
+/* addDoc/setDoc settle as soon as the browser has cached the write, so a
+   security-rules refusal can look like a success. Ask the SERVER for the
+   document back: if it is not there, Firestore refused it, and the media
+   has to live inside the wedding document instead (that write always works —
+   it is the same write the Save button makes). */
+async function confirmAssetWrite(slot, tail){
+  const { fs } = fb;
+  const path = ["weddings", current.code, "assets", slot].concat(String(tail || "").split("/").filter(Boolean));
+  let snap = null;
+  try { snap = await fs.getDocFromServer(fs.doc(fb.db, ...path)); }
+  catch (e){
+    const m = String(e && e.message || e);
+    if (/permission|unauthorized|failed to/i.test(m))
+      throw new Error("rules refused this upload — storing it inside the invitation instead");
+    if (/offline|network|unavailable|timeout|abort/i.test(m)) return;   // cannot verify, keep the write
+    throw e;
+  }
+  if (!snap.exists()) throw new Error("rules refused this upload — storing it inside the invitation instead");
 }
 async function loadMusicBlobUrl(code){
   const { fs } = fb;
@@ -781,9 +886,12 @@ function renderUploads(){
   $$(".up[data-kind]").forEach(box => {
     const kind = box.dataset.kind, def = UP_DEFS[kind];
     const url = def.get(current.config) || "";
-    const isAsset = url.indexOf("asset:") === 0;
+    const isAsset = isMarker(url);
+    const embedded = String(url).indexOf("embed:") === 0 ? ((current.config.embed || {})[kind] || "") : "";
     const list = (isAsset && isPhotoSlot(kind)) ? (ASSETS[kind] || []) : [];
-    const shown = isAsset ? (isPhotoSlot(kind) ? newestPhoto(kind) : "") : url;
+    const shown = String(url).indexOf("embed:") === 0 ? embedded
+                : isAsset ? newestPhoto(kind)
+                : url;                       // marker → real picture
     const isImg = isPhotoSlot(kind);
     box.innerHTML = `
       ${isImg
@@ -800,7 +908,9 @@ function renderUploads(){
       <div class="grow">
         <input type="file" accept="${def.accept}" class="file" ${isImg ? "multiple" : ""}>
         <input type="text" class="urlin"
-               placeholder="${isAsset ? (kind === "music" ? "uploaded mp3 ✔ — pick a file to replace, or paste a URL" : `uploaded photo${list.length > 1 ? "s (" + list.length + ")" : ""} ✔ — picking a file ADDS another photo, never replaces`) : "…or paste a direct URL"}"
+               placeholder="${isAsset ? (kind === "music" ? "uploaded mp3 ✔ — pick a file to replace, or paste a URL"
+                 : String(url).indexOf("embed:") === 0 ? "saved in the invitation ✔ — picking a file replaces it (the newest photo shows)"
+                 : `uploaded photo${list.length > 1 ? "s (" + list.length + ")" : ""} ✔ — picking a file ADDS another photo, never replaces`) : "…or paste a direct URL"}"
                value="${isAsset ? "" : esc(url)}">
         ${kind === "music" && MUSIC_BLOB ? `<button class="btn small up-play">▶ preview</button>` : ""}
       </div>
@@ -822,42 +932,74 @@ $$(".up[data-kind]").forEach(box => {           // delegated events (innerHTML i
           ASSETS[kind] = [{ id: "demo-" + Date.now(), dataUrl: url }];   // preview + stored in config
         if (url.indexOf("blob:") === 0) toast("Video/audio kept for this browser session only — use Firebase mode for real hosting");
         def.set(current.config, url);
-        /* PHOTOS → appended one document per picture inside Firestore */
-        const fsx = fb.fs; const added = []; let skipped = 0, failed = 0;
+      } else if (isPhotoSlot(kind)){
+        /* PHOTOS → one document per picture in the wedding's own collection.
+           If the rules refuse that write, the photo is stored INSIDE the
+           wedding document instead — the file picker keeps working either way. */
+        const fsx = fb.fs; const added = []; let embedded = 0, skipped = 0, failed = 0, denied = false;
+        const startMarker = String(def.get(current.config) || "");
         const ok = files.filter(f => f.type.indexOf("image/") === 0 && f.size <= 12 * 1024 * 1024);
         skipped = files.length - ok.length;
         for (let i = 0; i < ok.length; i++){
           toast(`Uploading photo ${i + 1}/${ok.length}…`);
+          /* always try the full-quality collection first; embed only when
+             the slot already lives inside the document, or the rules said no */
+          const wantEmbed = ASSET_WRITE_DENIED || startMarker.indexOf("embed:") === 0;
+          if (wantEmbed){
+            try { await embedPhoto(kind, ok[i]); embedded++; }
+            catch (err){ failed++; toast("Photo could not be stored: " + err.message); }
+            continue;
+          }
           try {
             const dataUrl = await compressImage(ok[i], 650);
             const ref = await fsx.addDoc(fsx.collection(fb.db, "weddings", current.code, "assets", kind, "photos"),
                                          { dataUrl, createdAt: fsx.serverTimestamp() });
+            await confirmAssetWrite(kind, "photos/" + ref.id);   // a refusal must not look like success
             const item = { id: ref.id, dataUrl };
             (ASSETS[kind] = ASSETS[kind] || []).push(item);   // instant preview, no refresh needed
             added.push(item);
-          } catch (err){ failed++; e.target.value = ""; }
+          } catch (err){
+            const em = String(err && err.message || err);
+            if (/permission|unauthorized|failed to|rules refused/i.test(em)){
+              denied = ASSET_WRITE_DENIED = true;             // rules not published → embed from now on
+              try { await embedPhoto(kind, ok[i]); embedded++; }
+              catch (e2){ failed++; toast("Photo could not be stored: " + e2.message); }
+            } else if (/unavailable|offline|network|internet|abort|timeout/i.test(em)) failed++;
+            else { failed++; toast("Upload failed: " + em); }
+          }
         }
-        if (!added.length && skipped + failed === 0) throw new Error("no photo was uploaded");
-        if (added.length) def.set(current.config, "asset:" + kind);
+        if (embedded && !added.length) def.set(current.config, "embed:" + kind);
+        else if (added.length) def.set(current.config, "asset:" + kind);
+        else if (!skipped && !failed && !embedded) throw new Error("no photo was uploaded");
         if (skipped) toast(`${skipped} file(s) skipped — only images up to 12 MB are accepted (they get compressed automatically)`);
-        else if (failed) toast(`${failed} upload(s) failed — network or rules; the existing photos are untouched`);
+        else if (embedded) toast("Photo saved in the invitation ✔ — the newest picture shows on the page (remember to Save)");
+        else if (failed && added.length) toast(`${failed} upload(s) failed — existing photos untouched`);
         else if (added.length > 1) toast(`${added.length} photos added ✔ (remember to Save)`);
+        else if (failed) toast("Upload failed — network problem; existing photos untouched");
         else toast("Photo added ✔ — earlier photos stay (remember to Save)");
       } else if (files[0].type.indexOf("audio/") === 0 || /\.(mp3|m4a|aac|ogg|wav)$/i.test(files[0].name)){
         /* MP3 → chunked inside Firestore (1 MiB document cap): free, no bucket */
         const f = files[0];
         if (f.size > MUSIC_LIMIT_BYTES)
           throw new Error(`track is ${(f.size / 1048576).toFixed(1)} MB — please use an mp3 under 4 MB`);
-        let lastToast = 0;
-        await uploadMusicChunked(current.code, f, (i, n) => {
-          const now = Date.now();
-          if (i === n || now - lastToast > 1200){ lastToast = now; toast(`Saving music ${i}/${n}…`); }
-        });
+        let lastToast = 0, musicDenied = false;
+        if (ASSET_WRITE_DENIED) musicDenied = true;
+        if (!musicDenied) try {
+          await uploadMusicChunked(current.code, f, (i, n) => {
+            const now = Date.now();
+            if (i === n || now - lastToast > 1200){ lastToast = now; toast(`Saving music ${i}/${n}…`); }
+          });
+        } catch (err){
+          const em = String(err && err.message || err);
+          if (/permission|unauthorized|failed to|rules refused/i.test(em)){ musicDenied = ASSET_WRITE_DENIED = true; }
+          else throw err;
+        }
+        if (musicDenied) def.set(current.config, await embedAudio("music", f));
+        else def.set(current.config, "asset:music");
         if (MUSIC_BLOB) URL.revokeObjectURL(MUSIC_BLOB);
         MUSIC_BLOB = URL.createObjectURL(f);
         if (box._a){ box._a.pause(); box._a = null; }
-        def.set(current.config, "asset:music");
-        toast("Music uploaded ✔ (remember to Save)");
+        toast(musicDenied ? "Music saved inside the invitation ✔ (remember to Save)" : "Music uploaded ✔ (remember to Save)");
       } else {
         throw new Error("Only photos and mp3 tracks can be uploaded here (videos are built into the invitation)");
       }
@@ -877,7 +1019,7 @@ $$(".up[data-kind]").forEach(box => {           // delegated events (innerHTML i
     if (!e.target.classList.contains("urlin")) return;
     const v = e.target.value.trim();
     const cur = UP_DEFS[box.dataset.kind].get(current.config) || "";
-    if (!v && cur.indexOf("asset:") === 0) return;   // empty box keeps the uploaded photo
+    if (!v && isMarker(cur)) return;   // empty box keeps the uploaded photo
     collect(); UP_DEFS[box.dataset.kind].set(current.config, v);
   });
   box.addEventListener("click", e => {
@@ -895,12 +1037,16 @@ $$(".up[data-kind]").forEach(box => {           // delegated events (innerHTML i
       if (DEMO_MODE){
         ASSETS[kind] = (ASSETS[kind] || []).filter(p => p.id !== id);
         if (!ASSETS[kind].length) UP_DEFS[kind].set(current.config, "");
+      } else if (cur.indexOf("embed:") === 0){          // picture lives in the wedding doc itself
+        if (current.config.embed) delete current.config.embed[cur.slice(6)];
+        ASSETS[kind] = [];
+        UP_DEFS[kind].set(current.config, "");
       } else if (cur.indexOf("asset:") === 0 && id === "__legacy__")
         fb.fs.deleteDoc(fb.fs.doc(fb.db, "weddings", current.code, "assets", kind)).catch(() => {});
       else if (cur.indexOf("asset:") === 0)
         fb.fs.deleteDoc(fb.fs.doc(fb.db, "weddings", current.code, "assets", kind, "photos", id)).catch(() => {});
       ASSETS[kind] = (ASSETS[kind] || []).filter(p => p.id !== id);
-      if (!ASSETS[kind].length && !DEMO_MODE) UP_DEFS[kind].set(current.config, "");
+      if (!ASSETS[kind].length && !DEMO_MODE && isMarker(cur)) UP_DEFS[kind].set(current.config, "");
       collect(); renderUploads(); toast("Photo deleted — the others are untouched");
       return;
     }
@@ -908,6 +1054,11 @@ $$(".up[data-kind]").forEach(box => {           // delegated events (innerHTML i
     collect();
     const cur = UP_DEFS[box.dataset.kind].get(current.config) || "";
     if (box._a){ box._a.pause(); box._a = null; }
+    if (cur.indexOf("embed:") === 0){                   // remove the picture stored in the document
+      const slot = cur.slice(6);
+      if (current.config.embed) delete current.config.embed[slot];
+      if (slot === "music" && MUSIC_BLOB){ URL.revokeObjectURL(MUSIC_BLOB); MUSIC_BLOB = ""; }
+    }
     if (!DEMO_MODE && cur.indexOf("asset:") === 0){    // remove the stored file too
       const slot = cur.slice(6);
       if (slot === "music"){
@@ -976,6 +1127,13 @@ async function openEditor(code){
   /* load the Firestore-stored photos for the previews */
   ASSETS = {};
   await Promise.all(PHOTO_SLOTS.map(s => collectSlotAssets(code, s)));
+  /* …and the ones that live inside the wedding document (embed mode), so the
+     thumbnail + its ✕ look exactly the same whichever storage is in use */
+  PHOTO_SLOTS.forEach(s => {
+    const m = String(UP_DEFS[s].get(current.config) || "");
+    const data = m.indexOf("embed:") === 0 ? (current.config.embed || {})[m.slice(6)] : "";
+    if (data) ASSETS[s] = [{ id: "embed", dataUrl: data }];
+  });
   /* uploaded mp3 (if any) → reassemble the chunks so the player previews it */
   if (String(current.config.media.music || "").indexOf("asset:") === 0){
     if (MUSIC_BLOB){ URL.revokeObjectURL(MUSIC_BLOB); MUSIC_BLOB = ""; }
@@ -999,6 +1157,8 @@ async function save(status){
   busy(true);
   try {
     collect();
+    /* Firestore dislikes empty map fields — drop the embed bag when it is empty */
+    if (current.config.embed && !Object.keys(current.config.embed).length) delete current.config.embed;
     if (status) { current.status = status;
       $("#e-status").textContent = status; $("#e-status").className = "badge " + status;
       $("#b-publish").textContent = status === "published" ? "Unpublish (draft)" : "Publish"; }
@@ -1069,6 +1229,9 @@ function afterSignOut(){
     showView("auth");
     return;
   }
+  /* Firebase is configured → real online mode only.
+     Remove any leftover DEMO data from this browser (localStorage photos). */
+  try { localStorage.removeItem(window.DEMO.KEY); } catch (e) {}
   try { await initFB(); }
   catch (e) { $("#a-msg").textContent = "Firebase init failed: " + e.message; $("#a-msg").className = "msg err"; return; }
 

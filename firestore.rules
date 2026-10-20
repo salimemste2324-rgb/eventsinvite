@@ -34,13 +34,22 @@ service cloud.firestore {
       allow delete: if request.auth != null
                     && resource.data.ownerUid == request.auth.uid;
 
-      /* Photos stored INSIDE Firestore (no Storage bucket needed):
-         guests may read them, only the wedding owner can write/delete. */
+      /* Files stored INSIDE Firestore (no Storage bucket, no card needed):
+         photos = one small doc per picture; mp3 = chunked docs under music.
+         Guests may read them, only the wedding owner can write/delete. */
       match /assets/{slot} {
         allow get: if true;
         allow write: if request.auth != null
                      && firestore.get(/databases/(default)/documents/weddings/$(code))
                           .data.ownerUid == request.auth.uid;
+
+        /* mp3 track chunks (assets/music/chunks/<n>) */
+        match /chunks/{n} {
+          allow get: if true;
+          allow write: if request.auth != null
+                       && firestore.get(/databases/(default)/documents/weddings/$(code))
+                            .data.ownerUid == request.auth.uid;
+        }
       }
     }
   }

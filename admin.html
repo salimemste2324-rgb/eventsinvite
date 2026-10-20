@@ -271,11 +271,10 @@ main{max-width:980px;margin:0 auto;padding:clamp(16px,4vw,40px)}
       <div id="f-palette"></div>
       <button class="btn small" id="b-add-pal" style="margin-top:10px">+ Add color</button>
 
-      <div class="sect-title">Ambience (optional)</div>
-      <div class="hint">Opening card video, background video, and music. Upload files (kept under your private
-      code folder) or paste any direct URL. Leave empty to use the invitation's built-in generated music.</div>
-      <div class="up" data-kind="open-video"></div>
-      <div class="up" data-kind="bg-video"></div>
+      <div class="sect-title">Music (optional)</div>
+      <div class="hint">The opening card video and background video are built into the invitation and stay as-is.
+      Here you can upload your own mp3 track (stored inside Firestore — no Storage, no card) or paste a direct
+      audio URL. Leave empty to keep the built-in generated music.</div>
       <div class="up" data-kind="music"></div>
 
       <div class="actions">
@@ -378,19 +377,23 @@ function deepMerge(base, over){
   return out;
 }
 /* saved data + built-in defaults (empty saved fields keep the default media/photos) */
-const fullConfig = saved => deepMerge(DEFAULT_DATA(), cleanEmpty(saved || {}));
+const fullConfig = saved => {
+  const c = deepMerge(DEFAULT_DATA(), cleanEmpty(saved || {}));
+  /* videos are bundled & locked: any old custom video value is ignored */
+  if (c.media){ c.media.video = DEFAULT_DATA().media.video; c.media.openVideo = DEFAULT_DATA().media.openVideo; }
+  return c;
+};
 
 /* ---------- firebase bootstrap ---------- */
-let fb = null;   // { app, auth, db, sto, fs, st }
+let fb = null;   // { app, auth, db, fs, fa }  — no Storage: everything lives in Firestore
 async function initFB(){
-  const [appMod, fs, authMod, st] = await Promise.all([
+  const [appMod, fs, authMod] = await Promise.all([
     import("https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js"),
     import("https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js"),
     import("https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js"),
-    import("https://www.gstatic.com/firebasejs/10.12.5/firebase-storage.js"),
   ]);
   const app = appMod.initializeApp(window.FIREBASE_CONFIG);
-  fb = { app, fs, st, fa: authMod, auth: authMod.getAuth(app), db: fs.getFirestore(app), sto: st.getStorage(app) };
+  fb = { app, fs, fa: authMod, auth: authMod.getAuth(app), db: fs.getFirestore(app) };
 }
 
 /* ---------- ui helpers ---------- */
@@ -650,16 +653,19 @@ function renderTexts(){
     }</div>`).join("");
 }
 
-/* ---- upload widgets (photos + media) ---- */
+/* ---- upload widgets (photos + music) ----
+   Videos are intentionally NOT editable: the opening card video and
+   background video are the bundled files (openinv.mp4 / bg.mp4) and
+   always stay. Only photos and the mp3 music track can be changed. */
 const UP_DEFS = {
   "bride":       { label: "Bride photo",      accept: "image/*",  get: c => c.photos.bride,        set: (c, u) => c.photos.bride = u },
   "groom":       { label: "Groom photo",      accept: "image/*",  get: c => c.photos.groom,        set: (c, u) => c.photos.groom = u },
   "couple":      { label: "Couple photo (card + footer)", accept: "image/*", get: c => c.photos.couple, set: (c, u) => c.photos.couple = u },
   "venue-photo": { label: "Venue photo",      accept: "image/*",  get: c => c.venue.photoUrl,      set: (c, u) => { c.venue.photoUrl = u; c.photos.venue = u; } },
-  "open-video":  { label: "Opening card video", accept: "video/*", get: c => c.media.openVideo,    set: (c, u) => c.media.openVideo = u },
-  "bg-video":    { label: "Background video", accept: "video/*",  get: c => c.media.video,         set: (c, u) => c.media.video = u },
-  "music":       { label: "Music track",      accept: "audio/*",  get: c => c.media.music,         set: (c, u) => c.media.music = u },
+  "music":       { label: "Music track (mp3)", accept: "audio/*", get: c => c.media.music,         set: (c, u) => c.media.music = u },
 };
+const MUSIC_LIMIT_BYTES = 4 * 1024 * 1024;   // mp3 size cap (chunked inside Firestore)
+let MUSIC_BLOB = "";                         // ready audio URL of the uploaded track (admin side)
 
 /* ---- photos stored INSIDE Firestore (no Storage bucket / no card) ----
    Images are compressed to a small JPEG data URL and written to
@@ -693,6 +699,51 @@ function compressImage(file, maxKB){
   });
 }
 
+function bufToDataUrl(buf){
+  const bytes = new Uint8Array(buf); let s = "";
+  for (let i = 0; i < bytes.length; i += 0x8000)
+    s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return "data:application/octet-stream;base64," + btoa(s);
+}
+function dataUrlToBytes(durl){
+  const bin = atob(durl.slice(durl.indexOf(",") + 1));
+  const u = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+  return u;
+}
+/* mp3s are too big for one Firestore document (1 MiB cap), so the track is
+   split into small chunks stored as weddings/<code>/assets/music/chunks/<n>,
+   with a manifest doc holding the chunk count — guests reassemble it into a
+   normal audio URL. Still 100% Firestore: no Storage, no card. */
+async function uploadMusicChunked(code, blob, onProgress){
+  const { fs } = fb;
+  const old = await fs.getDoc(fs.doc(fb.db, "weddings", code, "assets", "music")).catch(() => null);
+  if (old && old.exists())
+    await Promise.all(Array.from({ length: old.data().chunks || 0 },
+      (_, i) => fs.deleteDoc(fs.doc(fb.db, "weddings", code, "assets", "music", "chunks", String(i))).catch(() => {})));
+  const buf = await blob.arrayBuffer();
+  const CHUNK = 384 * 1024;                       // raw bytes per chunk → ~512KB of base64 per doc
+  const total = Math.ceil(buf.byteLength / CHUNK);
+  for (let i = 0; i < total; i++){
+    const durl = bufToDataUrl(buf.slice(i * CHUNK, (i + 1) * CHUNK));
+    await fs.setDoc(fs.doc(fb.db, "weddings", code, "assets", "music", "chunks", String(i)), { durl });
+    onProgress && onProgress(i + 1, total);
+  }
+  await fs.setDoc(fs.doc(fb.db, "weddings", code, "assets", "music"),
+                  { manifest: true, chunks: total, mime: blob.type || "audio/mpeg",
+                    updatedAt: fb.fs.serverTimestamp() });
+}
+async function loadMusicBlobUrl(code){
+  const { fs } = fb;
+  const m = await fs.getDoc(fs.doc(fb.db, "weddings", code, "assets", "music"));
+  if (!m.exists() || !m.data().chunks) return "";
+  const snaps = await Promise.all(Array.from({ length: m.data().chunks },
+    (_, i) => fs.getDoc(fs.doc(fb.db, "weddings", code, "assets", "music", "chunks", String(i)))));
+  const parts = snaps.filter(s => s.exists()).map(s => dataUrlToBytes(s.data().durl || ""));
+  if (!parts.length) return "";
+  return URL.createObjectURL(new Blob(parts, { type: m.data().mime || "audio/mpeg" }));
+}
+
 function renderUploads(){
   $$(".up[data-kind]").forEach(box => {
     const def = UP_DEFS[box.dataset.kind];
@@ -704,12 +755,13 @@ function renderUploads(){
     box.innerHTML = `
       ${isImg
         ? (shown ? `<img src="${esc(shown)}" class="prev">` : `<div class="ph">✦</div>`)
-        : `<div class="ph" style="width:64px">${box.dataset.kind === "music" ? "♪" : "▶"}</div>`}
+        : `<div class="ph" style="width:64px">♪</div>`}
       <div class="grow">
         <input type="file" accept="${def.accept}" class="file">
         <input type="text" class="urlin"
-               placeholder="${isAsset ? "uploaded photo ✔ — pick a file to replace, or paste a URL" : "…or paste a direct URL"}"
+               placeholder="${isAsset ? (box.dataset.kind === "music" ? "uploaded mp3 ✔ — pick a file to replace, or paste a URL" : "uploaded photo ✔ — pick a file to replace, or paste a URL") : "…or paste a direct URL"}"
                value="${isAsset ? "" : esc(url)}">
+        ${box.dataset.kind === "music" && MUSIC_BLOB ? `<button class="btn small up-play">▶ preview</button>` : ""}
       </div>
       ${url ? `<button class="btn small danger up-clear">✕</button>` : ""}`;
   });
@@ -733,23 +785,28 @@ $$(".up[data-kind]").forEach(box => {           // delegated events (innerHTML i
                            { dataUrl, updatedAt: fb.fs.serverTimestamp() });
         ASSETS[box.dataset.kind] = dataUrl;
         url = "asset:" + box.dataset.kind;
+      } else if (f.type.indexOf("audio/") === 0 || /\.(mp3|m4a|aac|ogg|wav)$/i.test(f.name)){
+        /* MP3 → chunked inside Firestore (1 MiB document cap): free, no bucket */
+        if (f.size > MUSIC_LIMIT_BYTES)
+          throw new Error(`track is ${(f.size / 1048576).toFixed(1)} MB — please use an mp3 under 4 MB`);
+        let lastToast = 0;
+        await uploadMusicChunked(current.code, f, (i, n) => {
+          const now = Date.now();
+          if (i === n || now - lastToast > 1200){ lastToast = now; toast(`Saving music ${i}/${n}…`); }
+        });
+        if (MUSIC_BLOB) URL.revokeObjectURL(MUSIC_BLOB);
+        MUSIC_BLOB = URL.createObjectURL(f);
+        if (box._a){ box._a.pause(); box._a = null; }
+        url = "asset:music";
       } else {
-        /* videos / music still go to Firebase Storage (needs the bucket) */
-        const { st } = fb;
-        const safe = box.dataset.kind + "-" + Math.random().toString(36).slice(2, 7) +
-                     "." + (f.name.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "");
-        const r = st.ref(fb.sto, `weddings/${current.code}/${safe}`);
-        await st.uploadBytes(r, f, { contentType: f.type || "application/octet-stream" });
-        url = await st.getDownloadURL(r);
+        throw new Error("Only photos and mp3 tracks can be uploaded here (videos are built into the invitation)");
       }
       def.set(current.config, url);
       renderUploads(); toast("Uploaded ✔ (remember to Save)");
     } catch (err) {
       const m = String(err && err.message || err);
-      if (/NoSuchBucket|404|not.?found/i.test(m))
-        toast("Uploads are off: Firebase Storage is not enabled for your project yet — see README Part 2b (Blaze upgrade → Storage → Get started)");
-      else if (/unauthorized|permission/i.test(m))
-        toast("Upload blocked by rules — publish the storage.rules text in Storage → Rules (README Part 2b, step 3)");
+      if (/unauthorized|permission/i.test(m))
+        toast("Upload blocked by rules — publish the latest firestore.rules text (README Part 2)");
       else toast("Upload failed: " + m);
       renderUploads();
     }
@@ -763,11 +820,30 @@ $$(".up[data-kind]").forEach(box => {           // delegated events (innerHTML i
     collect(); UP_DEFS[box.dataset.kind].set(current.config, v);
   });
   box.addEventListener("click", e => {
+    if (e.target.classList.contains("up-play")){        // ▶ preview the uploaded track
+      const b = e.target;
+      if (!box._a){ box._a = new Audio(MUSIC_BLOB); box._a.loop = true; box._a.volume = .6; }
+      if (box._a.paused){ box._a.play(); b.textContent = "⏸ stop"; }
+      else { box._a.pause(); b.textContent = "▶ preview"; }
+      return;
+    }
     if (!e.target.classList.contains("up-clear")) return;
     collect();
     const cur = UP_DEFS[box.dataset.kind].get(current.config) || "";
-    if (!DEMO_MODE && cur.indexOf("asset:") === 0)     // remove the stored photo too
-      fb.fs.deleteDoc(fb.fs.doc(fb.db, "weddings", current.code, "assets", box.dataset.kind)).catch(() => {});
+    if (box._a){ box._a.pause(); box._a = null; }
+    if (!DEMO_MODE && cur.indexOf("asset:") === 0){    // remove the stored file too
+      const slot = cur.slice(6);
+      if (slot === "music"){
+        const { fs } = fb;
+        fs.getDoc(fs.doc(fb.db, "weddings", current.code, "assets", "music")).then(m =>
+          Promise.all(Array.from({ length: (m.exists() && m.data().chunks) || 0 },
+            (_, i) => fs.deleteDoc(fs.doc(fb.db, "weddings", current.code, "assets", "music", "chunks", String(i))).catch(() => {})))
+        ).catch(() => {});
+        fs.deleteDoc(fs.doc(fb.db, "weddings", current.code, "assets", "music")).catch(() => {});
+        if (MUSIC_BLOB){ URL.revokeObjectURL(MUSIC_BLOB); MUSIC_BLOB = ""; }
+      } else
+        fb.fs.deleteDoc(fb.fs.doc(fb.db, "weddings", current.code, "assets", slot)).catch(() => {});
+    }
     delete ASSETS[box.dataset.kind];
     UP_DEFS[box.dataset.kind].set(current.config, ""); renderUploads();
   });
@@ -823,6 +899,11 @@ async function openEditor(code){
     try { const a = await fs.getDoc(fs.doc(fb.db, "weddings", code, "assets", s));
           if (a.exists()) ASSETS[s] = a.data().dataUrl || ""; } catch (e) {}
   }));
+  /* uploaded mp3 (if any) → reassemble the chunks so the player previews it */
+  if (String(current.config.media.music || "").indexOf("asset:") === 0){
+    if (MUSIC_BLOB){ URL.revokeObjectURL(MUSIC_BLOB); MUSIC_BLOB = ""; }
+    try { MUSIC_BLOB = await loadMusicBlobUrl(code); } catch (e) {}
+  }
   setInputs(current.config);
   showView("edit");
   /* live sync: if another device saves changes, reflect them here when idle */
@@ -870,9 +951,19 @@ $("#b-del").onclick = async () => {
   try {
     if (DEMO_MODE) window.DEMO.del(current.code);
     else {
-      await Promise.all(PHOTO_SLOTS.map(s =>
-        fb.fs.deleteDoc(fb.fs.doc(fb.db, "weddings", current.code, "assets", s)).catch(() => {})));
-      await fb.fs.deleteDoc(fb.fs.doc(fb.db, "weddings", current.code));
+      const { fs } = fb;
+      /* uploaded mp3 → remove its chunk docs first, then the manifest */
+      let musicDocs = [];
+      try {
+        const m = await fs.getDoc(fs.doc(fb.db, "weddings", current.code, "assets", "music"));
+        if (m.exists()) musicDocs = Array.from({ length: m.data().chunks || 0 },
+          (_, i) => fs.doc(fb.db, "weddings", current.code, "assets", "music", "chunks", String(i)));
+      } catch (e) {}
+      await Promise.all(musicDocs.map(r => fs.deleteDoc(r).catch(() => {})));
+      await Promise.all([...PHOTO_SLOTS, "music"].map(s =>
+        fs.deleteDoc(fs.doc(fb.db, "weddings", current.code, "assets", s)).catch(() => {})));
+      await fs.deleteDoc(fs.doc(fb.db, "weddings", current.code));
+      if (MUSIC_BLOB){ URL.revokeObjectURL(MUSIC_BLOB); MUSIC_BLOB = ""; }
     }
     toast("Wedding deleted");
     unsubDoc?.(); current = null; showView("app");

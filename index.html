@@ -2390,7 +2390,8 @@ const music = {
     if (this.playing) return;   // already primed inside the tap gesture (iOS)
     /* prefer a real music track when CONFIG.media.music is set */
     if (CONFIG.media.music){
-      if (!this.el){ this.el = new Audio(CONFIG.media.music); this.el.loop = true; this.el.volume = .55; }
+      if (this.el && this.el._src !== CONFIG.media.music){ this.el.pause(); this.el = null; }
+      if (!this.el){ this.el = new Audio(CONFIG.media.music); this.el._src = CONFIG.media.music; this.el.loop = true; this.el.volume = .55; }
       this.playing = true;
       this.el.play().catch(() => { this.playing = false; this.startAmbient(); });
       return;
@@ -2424,7 +2425,8 @@ const music = {
   /* Prime playback synchronously inside the user gesture — iOS autoplay policy */
   prime(){
     if (CONFIG.media.music){
-      if (!this.el){ this.el = new Audio(CONFIG.media.music); this.el.loop = true; this.el.volume = .55; }
+      if (this.el && this.el._src !== CONFIG.media.music){ this.el.pause(); this.el = null; }
+      if (!this.el){ this.el = new Audio(CONFIG.media.music); this.el._src = CONFIG.media.music; this.el.loop = true; this.el.volume = .55; }
       this.el.play().then(() => { this.playing = true; }).catch(() => {});
     } else {
       this.ensure();

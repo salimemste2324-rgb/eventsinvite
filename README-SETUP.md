@@ -63,25 +63,25 @@ browser session. The moment you paste real Firebase keys into
 
 - **Firestore**: Build → Firestore Database → **Rules** tab → open
   [`firestore.rules`](firestore.rules) in this folder, copy **everything**,
-  paste, **Publish**.
+  paste, **Publish** — then a confirmation popup appears, click
+  **Publish** again. (Two clicks. If you only click once the old rules
+  stay live and uploads/deletes fail with "insufficient permissions".)
+- Re-check after every update to `firestore.rules`: the rules tab shows
+  the last **published** version, not what's in the editor box.
 
-## Part 2b · Storage (only for video & music uploads)
+## Part 2b · Uploads — no Storage, no card, nothing to enable
 
-**Photos (bride / groom / couple / venue) need NOTHING** — the admin
-compresses them in the browser and stores them inside Firestore itself
-(`weddings/<code>/assets/…`), free, realtime, no bucket.
+Everything the admin uploads lives inside **Firestore** (the free Spark
+plan, no bucket, no Blaze, no credit card):
 
-Videos and background music are too big for Firestore, so uploading them
-uses Firebase Storage, which requires the **Blaze plan** (card entry,
-bill stays ~$0 inside the free quota). To turn it on:
-
-1. Firebase console → bottom of the left menu → **Upgrade plan → Blaze**
-   (pay-as-you-go, card for identity only).
-2. **Build → Storage → Get started** → default bucket, choose a location.
-3. **Storage → Rules tab** → open [`storage.rules`](storage.rules) in this
-   folder, copy **everything**, paste, **Publish**. (If it asks to enable
-   the "Firebase Rules API", say yes — it's Firebase's own check so
-   Storage can verify wedding ownership in Firestore.)
+- **Photos** (bride / groom / couple / venue) are compressed in the
+  browser and stored at `weddings/<code>/assets/<photo>` in real time.
+- **Music**: upload any mp3 up to 4 MB — it is split into small chunks
+  under `weddings/<code>/assets/music/chunks/…` and guests reassemble it
+  automatically. You can also paste a direct audio URL instead.
+- **Videos** (opening card + background) are **built into the invitation
+  and locked** — they always stay as shipped and cannot be edited or
+  uploaded, so there is nothing else to configure anywhere.
 
 ## Part 3 · Deploy to Vercel
 
@@ -102,8 +102,9 @@ bill stays ~$0 inside the free quota). To turn it on:
    your phone), date & time (the **Auto** button formats the display
    dates), venue + map coordinates, story, hashtag, RSVP deadline,
    schedule (each event has its own time, title and description),
-   dress-code colors, and optional opening video / background video /
-   music. The **"Every text line on the invitation"** box edits every
+   dress-code colors, and an optional music track (upload an mp3 or
+   paste a URL — the videos stay built-in). The **"Every text line on
+   the invitation"** box edits every
    heading, label and paragraph on the page — section titles, the cover
    line, the Quran verse and its translation, the couple captions, the
    3D chapter captions, the dress-code wording and the RSVP note and
@@ -120,11 +121,11 @@ bill stays ~$0 inside the free quota). To turn it on:
 - **Privacy**: guest links contain the only access key. Don't post them
   publicly (a public Instagram caption = everyone can open it). The
   invitation itself is private to link-holders.
-- **Limits & cost**: Firestore + Auth on the free tier; Storage on the
-  Blaze plan with a free quota (a few GB stored and daily downloads) —
-  realistically $0/month for this business. Vercel free tier: unlimited
-  static hosting. Far more than enough for photos, videos and thousands
-  of guests.
+- **Limits & cost**: **$0/month** — Auth, Firestore and the stored
+  photos/mp3 all live on Firebase's free Spark plan (no Storage bucket,
+  no card), plus Vercel's free static hosting. Photos are compressed
+  under 650 KB and mp3s capped at 4 MB per wedding, comfortably inside
+  the free quotas for thousands of guests.
 - **Local testing**: just open `index.html` — with no `?code=` and no
   Firebase keys it runs the built-in demo content.
 - To change the invitation's design (fonts, 3D scenes, layout), edit

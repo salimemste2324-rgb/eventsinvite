@@ -25,7 +25,29 @@ async function resolveAssets(fs, db, code, cfg){
   ["bride", "groom", "couple", "venue"].forEach(k => hit(cfg.photos, k));
   hit(cfg.venue, "photoUrl");
   await Promise.all(jobs);
+  await resolveMusic(fs, db, code, cfg);
   return cfg;
+}
+
+/* uploaded mp3 = chunked Firestore docs (assets/music + assets/music/chunks/<n>).
+   Guests reassemble the base64 chunks into a normal blob audio URL — still
+   100% Firestore, no Storage bucket, no card. */
+async function resolveMusic(fs, db, code, cfg){
+  const m = String(cfg && cfg.media && cfg.media.music || "");
+  if (m.indexOf("asset:") !== 0) return;
+  try {
+    const man = await fs.getDoc(fs.doc(db, "weddings", code, "assets", "music"));
+    if (!man.exists() || !man.data().chunks){ cfg.media.music = ""; return; }
+    const atob2 = s => { const b = atob(s), u = new Uint8Array(b.length);
+      for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; };
+    const snaps = await Promise.all(Array.from({ length: man.data().chunks },
+      (_, i) => fs.getDoc(fs.doc(db, "weddings", code, "assets", "music", "chunks", String(i)))));
+    const parts = snaps.filter(s => s.exists())
+      .map(s => atob2(String(s.data().durl || "").split(",")[1] || ""));
+    cfg.media.music = parts.length
+      ? URL.createObjectURL(new Blob(parts, { type: man.data().mime || "audio/mpeg" }))
+      : "";
+  } catch (e) { cfg.media.music = ""; }   // fallback: invitation uses its own music
 }
 
 async function start(){  /* ---- LOCAL DEMO MODE: codes starting with "demo-" read browser storage ---- */

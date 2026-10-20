@@ -691,27 +691,24 @@ $$(".up[data-kind]").forEach(box => {           // delegated events (innerHTML i
         url = await window.demoShrink(f, 1400);
         if (url.indexOf("blob:") === 0) toast("Video/audio kept for this browser session only — use Firebase mode for real hosting");
       } else {
-        /* Cloudinary (free, no card): unsigned upload straight from the browser.
-           Configure window.CLOUDINARY in config.js. */
-        const cl = window.CLOUDINARY || {};
-        const ready = cl.cloudName && cl.uploadPreset &&
-                      cl.cloudName.indexOf("PASTE") === -1 && cl.uploadPreset.indexOf("PASTE") === -1;
-        if (!ready) throw new Error("Add your Cloudinary cloud name + unsigned preset to config.js — or paste a direct URL instead");
-        let kind = "image";
-        if (f.type.indexOf("video") === 0 || f.type.indexOf("audio") === 0) kind = "video";
-        const fd = new FormData();
-        fd.append("file", f);
-        fd.append("upload_preset", cl.uploadPreset);
-        fd.append("folder", "eventsinvite/" + current.code + "/" + box.dataset.kind);
-        const res = await fetch(`https://api.cloudinary.com/v1_1/${cl.cloudName}/${kind}/upload`,
-                                { method: "POST", body: fd });
-        const j = await res.json().catch(() => ({}));
-        if (!res.ok || !j.secure_url) throw new Error(j.error && j.error.message || "Cloudinary HTTP " + res.status);
-        url = j.secure_url;
+        const { st } = fb;
+        const safe = box.dataset.kind + "-" + Math.random().toString(36).slice(2, 7) +
+                     "." + (f.name.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "");
+        const r = st.ref(fb.sto, `weddings/${current.code}/${safe}`);
+        await st.uploadBytes(r, f, { contentType: f.type || "application/octet-stream" });
+        url = await st.getDownloadURL(r);
       }
       def.set(current.config, url);
       renderUploads(); toast("Uploaded ✔ (remember to Save)");
-    } catch (err) { toast("Upload failed: " + err.message); renderUploads(); }
+    } catch (err) {
+      const m = String(err && err.message || err);
+      if (/NoSuchBucket|404|not.?found/i.test(m))
+        toast("Uploads are off: Firebase Storage is not enabled for your project yet — see README Part 2b (Blaze upgrade → Storage → Get started)");
+      else if (/unauthorized|permission/i.test(m))
+        toast("Upload blocked by rules — publish the storage.rules text in Storage → Rules (README Part 2b, step 3)");
+      else toast("Upload failed: " + m);
+      renderUploads();
+    }
     box.querySelector(".file") && (box.querySelector(".file").disabled = false);
   });
   box.addEventListener("input", e => {

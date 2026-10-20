@@ -21,7 +21,9 @@ async function start(){
     window.addEventListener("storage", e => {
       if (e.key !== window.DEMO.KEY) return;
       const n = window.DEMO.get(code);
-      if (n && n.status !== "revoked") bridge.data(n.config);
+      if (!n || n.status === "revoked")
+        bridge.fail("This demo invitation link is invalid or was deleted. Open the admin panel and copy the link again.");
+      else bridge.data(n.config);
     });
     return;
   }
@@ -56,10 +58,16 @@ async function start(){
     }
     bridge.data(snap.data().config || snap.data());
 
-    /* 2 · realtime — admin edits update every open guest page instantly */
+    /* 2 · realtime — admin edits update every open guest page instantly;
+       delete / revoke locks every OPEN page instantly too */
     fs.onSnapshot(ref, {
       next(s){
-        if (!s.exists() || s.data().status === "revoked") return;
+        if (!s.exists() || s.data().status === "revoked"){
+          bridge.fail(!s.exists()
+            ? "This invitation is no longer available — the organizer has removed it."
+            : "This invitation link has been revoked by the organizer. Please ask for a new link.");
+          return;
+        }
         bridge.data(s.data().config || s.data());
       },
       error(err){ console.warn("realtime listener:", err.message); }   // keep showing loaded data

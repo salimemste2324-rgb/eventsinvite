@@ -59,29 +59,26 @@ browser session. The moment you paste real Firebase keys into
    **Authentication → Settings → Authorized domains → Add domain** →
    e.g. `eventsinviteee.vercel.app`.
 
-## Part 1b · Cloudinary for uploads (free, NO credit card)
-
-Firebase Storage forces the paid Blaze plan, so photo/video/music uploads
-go to Cloudinary's free tier instead:
-
-1. Sign up at <https://cloudinary.com> (free plan, no card requested).
-2. On the dashboard, copy your **Cloud name** (shown at the top).
-3. **Settings (gear icon) → Upload tab → Signing Requests → Add upload
-   preset** → name it `eventsinvite`, set **Privacy: Unsigned** → Save →
-   copy the **preset name**.
-4. Open [`config.js`](config.js) in this folder and paste both into
-   `window.CLOUDINARY`, then redeploy (step in Part 3).
-
-The unsigned preset can only write new files into its own folder — it
-cannot read or change anything, so it is safe to put in a frontend file.
-
-## Part 2 · Paste the security rules
+## Part 2 · Paste the Firestore security rules
 
 - **Firestore**: Build → Firestore Database → **Rules** tab → open
   [`firestore.rules`](firestore.rules) in this folder, copy **everything**,
   paste, **Publish**.
-- No Storage step needed — [`storage.rules`](storage.rules) is only for the
-  optional Firebase-Storage route (requires Blaze/credit card).
+
+## Part 2b · Storage (photos/videos/music uploads)
+
+Firebase Storage requires the **Blaze plan** — the upgrade form asks for a
+credit card, but normal use of this site stays inside Firebase's free
+quota (several GB stored + daily downloads), so the bill is effectively
+$0. To turn it on:
+
+1. Firebase console → bottom of the left menu → **Upgrade plan → Blaze**
+   (pay-as-you-go, card for identity only).
+2. **Build → Storage → Get started** → default bucket, choose a location.
+3. **Storage → Rules tab** → open [`storage.rules`](storage.rules) in this
+   folder, copy **everything**, paste, **Publish**. (If it asks to enable
+   the "Firebase Rules API", say yes — it's Firebase's own check so
+   Storage can verify wedding ownership in Firestore.)
 
 ## Part 3 · Deploy to Vercel
 
@@ -120,10 +117,11 @@ cannot read or change anything, so it is safe to put in a frontend file.
 - **Privacy**: guest links contain the only access key. Don't post them
   publicly (a public Instagram caption = everyone can open it). The
   invitation itself is private to link-holders.
-- **Free limits** (no credit card anywhere): Firebase Spark plan — 1 GiB
-  Firestore + Auth; Cloudinary free plan — about 25 GB of uploads &
-  bandwidth per month; Vercel free tier — unlimited static hosting. Far
-  more than enough for photos, videos and thousands of guests.
+- **Limits & cost**: Firestore + Auth on the free tier; Storage on the
+  Blaze plan with a free quota (a few GB stored and daily downloads) —
+  realistically $0/month for this business. Vercel free tier: unlimited
+  static hosting. Far more than enough for photos, videos and thousands
+  of guests.
 - **Local testing**: just open `index.html` — with no `?code=` and no
   Firebase keys it runs the built-in demo content.
 - To change the invitation's design (fonts, 3D scenes, layout), edit

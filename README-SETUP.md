@@ -65,12 +65,15 @@ browser session. The moment you paste real Firebase keys into
   [`firestore.rules`](firestore.rules) in this folder, copy **everything**,
   paste, **Publish**.
 
-## Part 2b · Storage (photos/videos/music uploads)
+## Part 2b · Storage (only for video & music uploads)
 
-Firebase Storage requires the **Blaze plan** — the upgrade form asks for a
-credit card, but normal use of this site stays inside Firebase's free
-quota (several GB stored + daily downloads), so the bill is effectively
-$0. To turn it on:
+**Photos (bride / groom / couple / venue) need NOTHING** — the admin
+compresses them in the browser and stores them inside Firestore itself
+(`weddings/<code>/assets/…`), free, realtime, no bucket.
+
+Videos and background music are too big for Firestore, so uploading them
+uses Firebase Storage, which requires the **Blaze plan** (card entry,
+bill stays ~$0 inside the free quota). To turn it on:
 
 1. Firebase console → bottom of the left menu → **Upgrade plan → Blaze**
    (pay-as-you-go, card for identity only).

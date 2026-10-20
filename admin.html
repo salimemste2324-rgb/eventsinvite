@@ -661,19 +661,55 @@ const UP_DEFS = {
   "music":       { label: "Music track",      accept: "audio/*",  get: c => c.media.music,         set: (c, u) => c.media.music = u },
 };
 
+/* ---- photos stored INSIDE Firestore (no Storage bucket / no card) ----
+   Images are compressed to a small JPEG data URL and written to
+   weddings/<code>/assets/<slot>; the config field keeps a marker
+   "asset:<slot>" which the guest page resolves to the real picture. */
+const PHOTO_SLOTS = ["bride", "groom", "couple", "venue-photo"];
+let ASSETS = {};   // slot -> dataUrl, loaded when a wedding is opened
+
+function compressImage(file, maxKB){
+  return new Promise((resolve, reject) => {
+    const objUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(objUrl);
+      const c = document.createElement("canvas");
+      let dim = 1280;
+      (function step(){
+        const sc = Math.min(1, dim / Math.max(img.width, img.height));
+        c.width = Math.round(img.width * sc); c.height = Math.round(img.height * sc);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        for (const q of [.82, .72, .6, .5]){
+          const d = c.toDataURL("image/jpeg", q);
+          if (d.length * .75 < maxKB * 1024) return resolve(d);
+        }
+        if (dim > 640){ dim = Math.round(dim * .72); step(); }
+        else resolve(c.toDataURL("image/jpeg", .5));
+      })();
+    };
+    img.onerror = () => { URL.revokeObjectURL(objUrl); reject(new Error("Could not read the image file")); };
+    img.src = objUrl;
+  });
+}
+
 function renderUploads(){
   $$(".up[data-kind]").forEach(box => {
     const def = UP_DEFS[box.dataset.kind];
     const url = def.get(current.config) || "";
+    const isAsset = url.indexOf("asset:") === 0;
+    const shown   = isAsset ? (ASSETS[box.dataset.kind] || "") : url;   // marker → real picture
     const isImg = box.dataset.kind === "bride" || box.dataset.kind === "groom" ||
                   box.dataset.kind === "couple" || box.dataset.kind === "venue-photo";
     box.innerHTML = `
       ${isImg
-        ? (url ? `<img src="${esc(url)}" class="prev">` : `<div class="ph">✦</div>`)
+        ? (shown ? `<img src="${esc(shown)}" class="prev">` : `<div class="ph">✦</div>`)
         : `<div class="ph" style="width:64px">${box.dataset.kind === "music" ? "♪" : "▶"}</div>`}
       <div class="grow">
         <input type="file" accept="${def.accept}" class="file">
-        <input type="text" placeholder="…or paste a direct URL" class="urlin" value="${esc(url)}">
+        <input type="text" class="urlin"
+               placeholder="${isAsset ? "uploaded photo ✔ — pick a file to replace, or paste a URL" : "…or paste a direct URL"}"
+               value="${isAsset ? "" : esc(url)}">
       </div>
       ${url ? `<button class="btn small danger up-clear">✕</button>` : ""}`;
   });
@@ -690,7 +726,15 @@ $$(".up[data-kind]").forEach(box => {           // delegated events (innerHTML i
       if (DEMO_MODE){
         url = await window.demoShrink(f, 1400);
         if (url.indexOf("blob:") === 0) toast("Video/audio kept for this browser session only — use Firebase mode for real hosting");
+      } else if (f.type.indexOf("image/") === 0){
+        /* PHOTOS → stored compressed inside Firestore itself: free, no bucket */
+        const dataUrl = await compressImage(f, 650);
+        await fb.fs.setDoc(fb.fs.doc(fb.db, "weddings", current.code, "assets", box.dataset.kind),
+                           { dataUrl, updatedAt: fb.fs.serverTimestamp() });
+        ASSETS[box.dataset.kind] = dataUrl;
+        url = "asset:" + box.dataset.kind;
       } else {
+        /* videos / music still go to Firebase Storage (needs the bucket) */
         const { st } = fb;
         const safe = box.dataset.kind + "-" + Math.random().toString(36).slice(2, 7) +
                      "." + (f.name.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -713,11 +757,19 @@ $$(".up[data-kind]").forEach(box => {           // delegated events (innerHTML i
   });
   box.addEventListener("input", e => {
     if (!e.target.classList.contains("urlin")) return;
-    collect(); UP_DEFS[box.dataset.kind].set(current.config, e.target.value.trim());
+    const v = e.target.value.trim();
+    const cur = UP_DEFS[box.dataset.kind].get(current.config) || "";
+    if (!v && cur.indexOf("asset:") === 0) return;   // empty box keeps the uploaded photo
+    collect(); UP_DEFS[box.dataset.kind].set(current.config, v);
   });
   box.addEventListener("click", e => {
     if (!e.target.classList.contains("up-clear")) return;
-    collect(); UP_DEFS[box.dataset.kind].set(current.config, ""); renderUploads();
+    collect();
+    const cur = UP_DEFS[box.dataset.kind].get(current.config) || "";
+    if (!DEMO_MODE && cur.indexOf("asset:") === 0)     // remove the stored photo too
+      fb.fs.deleteDoc(fb.fs.doc(fb.db, "weddings", current.code, "assets", box.dataset.kind)).catch(() => {});
+    delete ASSETS[box.dataset.kind];
+    UP_DEFS[box.dataset.kind].set(current.config, ""); renderUploads();
   });
 });
 
@@ -765,6 +817,12 @@ async function openEditor(code){
   if (!snap.exists()) { toast("Wedding not found"); showView("app"); return; }
   current = { code, ...snap.data() };
   current.config = fullConfig(current.config);
+  /* load the Firestore-stored photos for the previews */
+  ASSETS = {};
+  await Promise.all(PHOTO_SLOTS.map(async s => {
+    try { const a = await fs.getDoc(fs.doc(fb.db, "weddings", code, "assets", s));
+          if (a.exists()) ASSETS[s] = a.data().dataUrl || ""; } catch (e) {}
+  }));
   setInputs(current.config);
   showView("edit");
   /* live sync: if another device saves changes, reflect them here when idle */
@@ -811,7 +869,11 @@ $("#b-del").onclick = async () => {
   busy(true);
   try {
     if (DEMO_MODE) window.DEMO.del(current.code);
-    else await fb.fs.deleteDoc(fb.fs.doc(fb.db, "weddings", current.code));
+    else {
+      await Promise.all(PHOTO_SLOTS.map(s =>
+        fb.fs.deleteDoc(fb.fs.doc(fb.db, "weddings", current.code, "assets", s)).catch(() => {})));
+      await fb.fs.deleteDoc(fb.fs.doc(fb.db, "weddings", current.code));
+    }
     toast("Wedding deleted");
     unsubDoc?.(); current = null; showView("app");
   } catch (e) { toast("Delete failed: " + e.message); }

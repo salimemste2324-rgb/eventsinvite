@@ -33,6 +33,15 @@ service cloud.firestore {
 
       allow delete: if request.auth != null
                     && resource.data.ownerUid == request.auth.uid;
+
+      /* Photos stored INSIDE Firestore (no Storage bucket needed):
+         guests may read them, only the wedding owner can write/delete. */
+      match /assets/{slot} {
+        allow get: if true;
+        allow write: if request.auth != null
+                     && firestore.get(/databases/(default)/documents/weddings/$(code))
+                          .data.ownerUid == request.auth.uid;
+      }
     }
   }
 }

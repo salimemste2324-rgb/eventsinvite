@@ -8,8 +8,27 @@
 const bridge = window.__inviteBridge;
 const code   = (new URLSearchParams(location.search).get("code") || "").trim();
 
-async function start(){
-  /* ---- LOCAL DEMO MODE: codes starting with "demo-" read browser storage ---- */
+/* resolve "asset:<slot>" markers → the JPEG that the admin stored inside
+   Firestore (weddings/<code>/assets/<slot>) — no Storage bucket needed.
+   Missing asset → "" so the bundled default photo shows instead. */
+async function resolveAssets(fs, db, code, cfg){
+  if (!cfg) return cfg;
+  const jobs = [];
+  const hit = (obj, key) => {
+    const v = String(obj && obj[key] || "");
+    if (v.indexOf("asset:") !== 0) return;
+    const slot = v.slice(6);
+    jobs.push(fs.getDoc(fs.doc(db, "weddings", code, "assets", slot))
+      .then(a => { obj[key] = a.exists() ? (a.data().dataUrl || "") : ""; })
+      .catch(() => { obj[key] = ""; }));
+  };
+  ["bride", "groom", "couple", "venue"].forEach(k => hit(cfg.photos, k));
+  hit(cfg.venue, "photoUrl");
+  await Promise.all(jobs);
+  return cfg;
+}
+
+async function start(){  /* ---- LOCAL DEMO MODE: codes starting with "demo-" read browser storage ---- */
   if (code.indexOf("demo-") === 0){
     const w = window.DEMO && window.DEMO.get(code);
     if (!w || w.status === "revoked"){
@@ -56,19 +75,19 @@ async function start(){
       bridge.fail("This invitation link is invalid or has been revoked by the organizer. Please ask for a new link.");
       return;
     }
-    bridge.data(snap.data().config || snap.data());
+    bridge.data(await resolveAssets(fs, db, code, snap.data().config || snap.data()));
 
     /* 2 · realtime — admin edits update every open guest page instantly;
        delete / revoke locks every OPEN page instantly too */
     fs.onSnapshot(ref, {
-      next(s){
+      next: async s => {
         if (!s.exists() || s.data().status === "revoked"){
           bridge.fail(!s.exists()
             ? "This invitation is no longer available — the organizer has removed it."
             : "This invitation link has been revoked by the organizer. Please ask for a new link.");
           return;
         }
-        bridge.data(s.data().config || s.data());
+        bridge.data(await resolveAssets(fs, db, code, s.data().config || s.data()));
       },
       error(err){ console.warn("realtime listener:", err.message); }   // keep showing loaded data
     });

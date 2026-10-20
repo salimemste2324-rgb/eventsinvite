@@ -24,9 +24,15 @@ service cloud.firestore {
       allow create: if request.auth != null
                     && request.resource.data.ownerUid == request.auth.uid;
 
-      allow update, delete: if request.auth != null
+      /* NOTE: update and delete are SEPARATE on purpose — on a delete there is
+         no "incoming document", so a rule that checks request.resource.data
+         would block every delete with permission-denied. */
+      allow update: if request.auth != null
                     && resource.data.ownerUid == request.auth.uid
                     && request.resource.data.ownerUid == request.auth.uid;
+
+      allow delete: if request.auth != null
+                    && resource.data.ownerUid == request.auth.uid;
     }
   }
 }

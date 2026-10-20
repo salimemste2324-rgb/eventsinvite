@@ -1147,26 +1147,26 @@ function runPreloader(done){
     if (finished) return; finished = true;
     if (REDUCED || !window.gsap){ pre.style.display = "none"; done(); return; }
     gsap.timeline({ onComplete: () => { pre.style.display = "none"; done(); } })
-      .to(".pl-logo-wrap", { scale: 1.14, duration: .5, ease: "power2.in" })
-      .to(".pl-ring", { opacity: 0, scale: 1.6, duration: .55, ease: "power2.in" }, "<")
-      .to(".pl-brand, .preload-label", { opacity: 0, y: -14, duration: .4 }, "<")
-      .to(pre, { autoAlpha: 0, duration: .55 }, "-=.15");
+      .to(".pl-logo-wrap", { scale: 1.14, duration: .28, ease: "power2.in" })
+      .to(".pl-ring", { opacity: 0, scale: 1.6, duration: .32, ease: "power2.in" }, "<")
+      .to(".pl-brand, .preload-label", { opacity: 0, y: -14, duration: .25 }, "<")
+      .to(pre, { autoAlpha: 0, duration: .32 }, "-=.1");
   };
   /* 3D entrance: the logo flips into view, rings ignite, brand letters settle */
   if (window.gsap && !REDUCED){
-    gsap.from(".pl-logo-wrap", { rotateY: -180, scale: .35, opacity: 0, duration: 1.5, ease: "power3.out" });
-    gsap.from(".pl-ring",      { opacity: 0, scale: .55, duration: 1.1, stagger: .18, delay: .45, ease: "power2.out" });
-    gsap.from(".pl-brand",     { letterSpacing: "1.5em", opacity: 0, duration: 1.3, delay: .8, ease: "power2.out" });
-    gsap.from(".preload-label",{ opacity: 0, y: 10, duration: .8, delay: 1.35 });
+    gsap.from(".pl-logo-wrap", { rotateY: -180, scale: .35, opacity: 0, duration: .75, ease: "power3.out" });
+    gsap.from(".pl-ring",      { opacity: 0, scale: .55, duration: .55, stagger: .08, delay: .2, ease: "power2.out" });
+    gsap.from(".pl-brand",     { letterSpacing: "1.5em", opacity: 0, duration: .7, delay: .35, ease: "power2.out" });
+    gsap.from(".preload-label",{ opacity: 0, y: 10, duration: .4, delay: .55 });
   }
   const fontsReady = document.fonts ? document.fonts.ready : Promise.resolve();
   Promise.all([ new Promise(r => window.addEventListener("load", r)), fontsReady ])
     .then(() => {
-      /* let the entrance animation be seen before leaving */
-      const minHold = 2600 - (performance && performance.now ? performance.now() : 2600);
+      /* the logo+text are fully shown by ~1.3s — then straight to the invitation */
+      const minHold = 1100 - (performance && performance.now ? performance.now() : 1100);
       if (minHold > 0) setTimeout(finish, minHold); else finish();
     });
-  setTimeout(finish, 7000); // safety: never hang
+  setTimeout(finish, 2600); // hard cap: preloader never outlives ~3 seconds
 }
 
 /* =====================================================================
@@ -1333,8 +1333,8 @@ function initBackground(){
       if (p.position.x < -20) p.position.x =  20;
     });
 
-    /* parallax camera + scroll dolly */
-    camera.position.x += ((mx * 1.6) - camera.position.x) * .045;
+    /* parallax camera + scroll dolly — horizontal frozen (no left/right drift) */
+    camera.position.x += (0 - camera.position.x) * .045;
     camera.position.y += (((-my * 1.1) - scrollState.y * .0006) - camera.position.y) * .045;
     camera.lookAt(0, 0, 0);
     renderer.render(scene, camera);
@@ -1580,16 +1580,14 @@ function initCover(){
     }
   }
 
-  /* parallax targets: mouse + gyroscope */
+  /* parallax targets: mouse + gyroscope — horizontal frozen, vertical only */
   const tilt = { x: 0, y: 0, tx: 0, ty: 0 };
   addEventListener("pointermove", e => {
-    tilt.tx = (e.clientX / innerWidth  - .5) * .55;
     tilt.ty = (e.clientY / innerHeight - .5) * .35;
   }, { passive: true });
   function bindGyro(){
     addEventListener("deviceorientation", e => {
-      if (e.gamma == null) return;
-      tilt.tx = clamp(e.gamma / 40, -1, 1) * .45;
+      if (e.beta == null) return;
       tilt.ty = clamp((e.beta - 45) / 40, -1, 1) * .3;
     }, { passive: true });
   }
@@ -1624,7 +1622,7 @@ function initCover(){
     if (!opening){
       tilt.x += (tilt.tx - tilt.x) * .06;
       tilt.y += (tilt.ty - tilt.y) * .06;
-      env.rotation.y = tilt.x * 1.1 + Math.sin(t * .4) * .06;        // mouse/gyro + slow spin
+      env.rotation.y = tilt.x * 1.1;                                  // horizontal frozen (no mouse/gyro, no idle spin)
       env.rotation.x = -tilt.y * .8 + Math.sin(t * .3) * .03;
     } else {                                                          // settle flat during the open
       env.rotation.y += (0 - env.rotation.y) * .08;
@@ -2140,8 +2138,8 @@ function initAnimations(){
 
   /* ---- Couple portraits: slide in from both sides, tilt, heart pops ---- */
   const coupleST = () => ({ trigger: "#couple", start: "top 72%" });
-  gsap.from("#portrait-bride", { x: -130, opacity: 0, rotate: -7, duration: 1.1, scrollTrigger: coupleST() });
-  gsap.from("#portrait-groom", { x: 130, opacity: 0, rotate: 7, duration: 1.1, scrollTrigger: coupleST() });
+  gsap.from("#portrait-bride", { y: 36, opacity: 0, duration: .9, scrollTrigger: coupleST() });
+  gsap.from("#portrait-groom", { y: 36, opacity: 0, duration: .9, delay: .12, scrollTrigger: coupleST() });
   gsap.from(".heart-link",   { scale: 0, opacity: 0, delay: .45, ease: "back.out(2.5)", duration: .8, scrollTrigger: coupleST() });
   /* subtle parallax inside each portrait */
   $$(".p-frame img").forEach(im => {
@@ -2186,7 +2184,7 @@ function initAnimations(){
       trigger: item, start: "top 84%", once: true,
       onEnter(){
         gsap.from($$(".t-time, .t-name, .t-desc", item),
-          { x: -26, opacity: 0, duration: .75, stagger: .07 });
+          { y: 18, opacity: 0, duration: .75, stagger: .07 });
         const objH = { v: 0 }, objM = { v: 0 };
         gsap.to(objH, { v: h, duration: 1.1, ease: "power1.out", onUpdate: () => hEl.textContent = String(Math.round(objH.v)).padStart(2, "0") });
         gsap.to(objM, { v: m, duration: 1.1, ease: "power1.out", onUpdate: () => mEl.textContent = String(Math.round(objM.v)).padStart(2, "0") });
@@ -2275,7 +2273,7 @@ function initTilt(){
   const onMove = (x, y) => {
     const r = card.getBoundingClientRect();
     const px = (x - r.left) / r.width, py = (y - r.top) / r.height;
-    trx = (0.5 - py) * max; tryy = (px - 0.5) * max;
+    trx = (0.5 - py) * max; tryy = 0;                                 // vertical tilt only — horizontal frozen
     card.style.setProperty("--gx", px * 100 + "%");
     card.style.setProperty("--gy", py * 100 + "%");
     kick();

@@ -75,7 +75,10 @@ Everything the admin uploads lives inside **Firestore** (the free Spark
 plan, no bucket, no Blaze, no credit card):
 
 - **Photos** (bride / groom / couple / venue) are compressed in the
-  browser and stored at `weddings/<code>/assets/<photo>` in real time.
+  browser and stored as a collection of one document per picture at
+  `weddings/<code>/assets/<slot>/photos/<id>` — uploading more photos
+  ADDS to the collection, each photo has its own ✕ delete button, and
+  nothing ever replaces an existing photo.
 - **Music**: upload any mp3 up to 4 MB — it is split into small chunks
   under `weddings/<code>/assets/music/chunks/…` and guests reassemble it
   automatically. You can also paste a direct audio URL instead.

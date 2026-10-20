@@ -43,6 +43,15 @@ service cloud.firestore {
                      && firestore.get(/databases/(default)/documents/weddings/$(code))
                           .data.ownerUid == request.auth.uid;
 
+        /* one document PER PHOTO under assets/<slot>/photos/<id>:
+           guests may read them, only the wedding owner can add/delete */
+        match /photos/{pid} {
+          allow get, list: if true;
+          allow write: if request.auth != null
+                       && firestore.get(/databases/(default)/documents/weddings/$(code))
+                            .data.ownerUid == request.auth.uid;
+        }
+
         /* mp3 track chunks (assets/music/chunks/<n>) */
         match /chunks/{n} {
           allow get: if true;

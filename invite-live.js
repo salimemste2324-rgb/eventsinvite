@@ -8,25 +8,55 @@
 const bridge = window.__inviteBridge;
 const code   = (new URLSearchParams(location.search).get("code") || "").trim();
 
-/* resolve "asset:<slot>" markers → the JPEG that the admin stored inside
-   Firestore (weddings/<code>/assets/<slot>) — no Storage bucket needed.
-   Missing asset → "" so the bundled default photo shows instead. */
+/* resolve "asset:<slot>" markers → the JPEGs that the admin stores inside
+   Firestore (weddings/<code>/assets/<slot>/photos/<id> — one document per
+   picture, newest wins; older single-doc photos still work).
+   No Storage bucket needed. Missing asset → "" so the bundled default
+   photo shows instead. */
 async function resolveAssets(fs, db, code, cfg){
   if (!cfg) return cfg;
-  const jobs = [];
-  const hit = (obj, key) => {
-    const v = String(obj && obj[key] || "");
-    if (v.indexOf("asset:") !== 0) return;
-    const slot = v.slice(6);
-    jobs.push(fs.getDoc(fs.doc(db, "weddings", code, "assets", slot))
-      .then(a => { obj[key] = a.exists() ? (a.data().dataUrl || "") : ""; })
-      .catch(() => { obj[key] = ""; }));
+  cfg.__photos__ = {};
+  const slots = new Set();
+  Object.values(cfg.photos || {}).forEach(v => {
+    const s = String(v || ""); if (s.indexOf("asset:") === 0) slots.add(s.slice(6));
+  });
+  const vp = String(cfg.venue && cfg.venue.photoUrl || "");
+  if (vp.indexOf("asset:") === 0) slots.add(vp.slice(6));
+  await Promise.all([...slots].map(async s => {
+    cfg.__photos__[s] = await slotPhotos(fs, db, code, s);
+  }));
+  const origPhotos = (cfg.photos && Object.assign({}, cfg.photos)) || {};
+  const pick = key => {
+    const def = String(origPhotos[key] || "");
+    if (def.indexOf("asset:") !== 0) return def;           // plain URL / empty kept as-is
+    const arr = cfg.__photos__[def.slice(6)];
+    return (arr && arr.length) ? arr[arr.length - 1] : ""; // newest uploaded photo
   };
-  ["bride", "groom", "couple", "venue"].forEach(k => hit(cfg.photos, k));
-  hit(cfg.venue, "photoUrl");
-  await Promise.all(jobs);
+  cfg.photos.bride = pick("bride");
+  cfg.photos.groom = pick("groom");
+  cfg.photos.couple = pick("couple");
+  cfg.photos.venue = pick("venue");
+  if (String(cfg.venue && cfg.venue.photoUrl || "").indexOf("asset:") === 0)
+    cfg.venue.photoUrl = pick("venue");
+  delete cfg.__photos__;
   await resolveMusic(fs, db, code, cfg);
   return cfg;
+}
+
+/* fetch every photo of a slot: new collection layout first, then the
+   legacy one-document layout as fallback. */
+async function slotPhotos(fs, db, code, slot){
+  const out = [];
+  try {
+    const a = await fs.getDoc(fs.doc(db, "weddings", code, "assets", slot));
+    if (a.exists() && a.data().dataUrl) out.push(a.data().dataUrl);   // legacy single photo
+  } catch (e) {}
+  try {
+    const q = await fs.getDocs(fs.query(fs.collection(db, "weddings", code, "assets", slot, "photos"),
+                                        fs.orderBy(fs.documentId(), "asc")));
+    q.forEach(d => { const u = d.data().dataUrl; if (u) out.push(u); });
+  } catch (e) {}
+  return out;
 }
 
 /* uploaded mp3 = chunked Firestore docs (assets/music + assets/music/chunks/<n>).

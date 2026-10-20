@@ -668,11 +668,16 @@ const MUSIC_LIMIT_BYTES = 4 * 1024 * 1024;   // mp3 size cap (chunked inside Fir
 let MUSIC_BLOB = "";                         // ready audio URL of the uploaded track (admin side)
 
 /* ---- photos stored INSIDE Firestore (no Storage bucket / no card) ----
-   Images are compressed to a small JPEG data URL and written to
-   weddings/<code>/assets/<slot>; the config field keeps a marker
-   "asset:<slot>" which the guest page resolves to the real picture. */
+   Each wedding owns an INDEPENDENT photo collection per slot:
+   weddings/<code>/assets/<slot>/photos/<serverId> — one document per
+   picture, so uploading a new photo NEVER touches or replaces the ones
+   already there, and deleting one photo removes only that one.
+   The config field keeps the marker "asset:<slot>"; the guest page
+   resolves it to the newest photo (older single-doc photos from before
+   this upgrade are still read). */
 const PHOTO_SLOTS = ["bride", "groom", "couple", "venue-photo"];
-let ASSETS = {};   // slot -> dataUrl, loaded when a wedding is opened
+const isPhotoSlot = k => PHOTO_SLOTS.indexOf(k) !== -1;
+let ASSETS = {};   // slot -> [{ id, dataUrl }], loaded when a wedding is opened
 
 function compressImage(file, maxKB){
   return new Promise((resolve, reject) => {
@@ -744,49 +749,103 @@ async function loadMusicBlobUrl(code){
   return URL.createObjectURL(new Blob(parts, { type: m.data().mime || "audio/mpeg" }));
 }
 
+/* ---- photo upload / delete (append-safe: each photo is its own doc) ---- */
+const newestPhoto = slot => (ASSETS[slot] && ASSETS[slot].length) ? ASSETS[slot][ASSETS[slot].length - 1].dataUrl : "";
+async function collectSlotAssets(code, slot){
+  const { fs } = fb;
+  const list = [];
+  try {
+    const q = await fs.getDocs(fs.query(fs.collection(fb.db, "weddings", code, "assets", slot, "photos"),
+                                         fs.orderBy(fs.documentId(), "asc")));
+    q.forEach(d => { const u = d.data().dataUrl; if (u) list.push({ id: d.id, dataUrl: u }); });
+  } catch (e) {}
+  if (!list.length){   // legacy: one photo stored directly in the slot doc
+    try {
+      const a = await fs.getDoc(fs.doc(fb.db, "weddings", code, "assets", slot));
+      if (a.exists() && a.data().dataUrl) list.push({ id: "__legacy__", dataUrl: a.data().dataUrl });
+    } catch (e) {}
+  }
+  ASSETS[slot] = list;
+}
+async function clearSlotAssets(code, slot){   // delete every photo of a slot
+  const { fs } = fb;
+  try {
+    const q = await fs.getDocs(fs.query(fs.collection(fb.db, "weddings", code, "assets", slot, "photos")));
+    await Promise.all(q.docs.map(d => fs.deleteDoc(d.ref).catch(() => {})));
+  } catch (e) {}
+  fs.deleteDoc(fs.doc(fb.db, "weddings", code, "assets", slot)).catch(() => {});
+  ASSETS[slot] = [];
+}
+
 function renderUploads(){
   $$(".up[data-kind]").forEach(box => {
-    const def = UP_DEFS[box.dataset.kind];
+    const kind = box.dataset.kind, def = UP_DEFS[kind];
     const url = def.get(current.config) || "";
     const isAsset = url.indexOf("asset:") === 0;
-    const shown   = isAsset ? (ASSETS[box.dataset.kind] || "") : url;   // marker → real picture
-    const isImg = box.dataset.kind === "bride" || box.dataset.kind === "groom" ||
-                  box.dataset.kind === "couple" || box.dataset.kind === "venue-photo";
+    const list = (isAsset && isPhotoSlot(kind)) ? (ASSETS[kind] || []) : [];
+    const shown = isAsset ? (isPhotoSlot(kind) ? newestPhoto(kind) : "") : url;
+    const isImg = isPhotoSlot(kind);
     box.innerHTML = `
       ${isImg
-        ? (shown ? `<img src="${esc(shown)}" class="prev">` : `<div class="ph">✦</div>`)
+        ? `<div class="up-thumbs" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;min-width:64px">
+            ${list.length
+              ? list.map(p => `<div style="position:relative">
+                   <img src="${esc(p.dataUrl)}" class="prev" style="width:56px;height:56px;object-fit:cover">
+                   <button class="btn small danger up-del" data-id="${p.id}" title="Delete this photo only"
+                           style="position:absolute;top:-6px;right:-6px;padding:2px 6px;border-radius:50%">✕</button>
+                 </div>`).join("")
+              : (shown ? `<img src="${esc(shown)}" class="prev">` : `<div class="ph">✦</div>`)}
+          </div>`
         : `<div class="ph" style="width:64px">♪</div>`}
       <div class="grow">
-        <input type="file" accept="${def.accept}" class="file">
+        <input type="file" accept="${def.accept}" class="file" ${isImg ? "multiple" : ""}>
         <input type="text" class="urlin"
-               placeholder="${isAsset ? (box.dataset.kind === "music" ? "uploaded mp3 ✔ — pick a file to replace, or paste a URL" : "uploaded photo ✔ — pick a file to replace, or paste a URL") : "…or paste a direct URL"}"
+               placeholder="${isAsset ? (kind === "music" ? "uploaded mp3 ✔ — pick a file to replace, or paste a URL" : `uploaded photo${list.length > 1 ? "s (" + list.length + ")" : ""} ✔ — picking a file ADDS another photo, never replaces`) : "…or paste a direct URL"}"
                value="${isAsset ? "" : esc(url)}">
-        ${box.dataset.kind === "music" && MUSIC_BLOB ? `<button class="btn small up-play">▶ preview</button>` : ""}
+        ${kind === "music" && MUSIC_BLOB ? `<button class="btn small up-play">▶ preview</button>` : ""}
       </div>
-      ${url ? `<button class="btn small danger up-clear">✕</button>` : ""}`;
+      ${url ? `<button class="btn small danger up-clear" title="Remove ALL photos of this slot">✕</button>` : ""}`;
   });
 }
 $$(".up[data-kind]").forEach(box => {           // delegated events (innerHTML is re-rendered)
   box.addEventListener("change", async e => {
-    const f = e.target.files?.[0]; if (!f) return;
-    const def = UP_DEFS[box.dataset.kind];
+    const files = Array.from(e.target.files || []); if (!files.length) return;
+    const kind = box.dataset.kind, def = UP_DEFS[kind];
+    if (!current) { toast("Open a wedding first"); e.target.value = ""; return; }
     box.querySelector(".file").disabled = true;
-    toast(`Uploading ${f.name}…`);
     try {
       collect();
-      let url;
       if (DEMO_MODE){
-        url = await window.demoShrink(f, 1400);
+        const one = files[0];
+        const url = await window.demoShrink(one, 1400);
+        if (isPhotoSlot(kind) && url.indexOf("blob:") !== 0)
+          ASSETS[kind] = [{ id: "demo-" + Date.now(), dataUrl: url }];   // preview + stored in config
         if (url.indexOf("blob:") === 0) toast("Video/audio kept for this browser session only — use Firebase mode for real hosting");
-      } else if (f.type.indexOf("image/") === 0){
-        /* PHOTOS → stored compressed inside Firestore itself: free, no bucket */
-        const dataUrl = await compressImage(f, 650);
-        await fb.fs.setDoc(fb.fs.doc(fb.db, "weddings", current.code, "assets", box.dataset.kind),
-                           { dataUrl, updatedAt: fb.fs.serverTimestamp() });
-        ASSETS[box.dataset.kind] = dataUrl;
-        url = "asset:" + box.dataset.kind;
-      } else if (f.type.indexOf("audio/") === 0 || /\.(mp3|m4a|aac|ogg|wav)$/i.test(f.name)){
+        def.set(current.config, url);
+        /* PHOTOS → appended one document per picture inside Firestore */
+        const fsx = fb.fs; const added = []; let skipped = 0, failed = 0;
+        const ok = files.filter(f => f.type.indexOf("image/") === 0 && f.size <= 12 * 1024 * 1024);
+        skipped = files.length - ok.length;
+        for (let i = 0; i < ok.length; i++){
+          toast(`Uploading photo ${i + 1}/${ok.length}…`);
+          try {
+            const dataUrl = await compressImage(ok[i], 650);
+            const ref = await fsx.addDoc(fsx.collection(fb.db, "weddings", current.code, "assets", kind, "photos"),
+                                         { dataUrl, createdAt: fsx.serverTimestamp() });
+            const item = { id: ref.id, dataUrl };
+            (ASSETS[kind] = ASSETS[kind] || []).push(item);   // instant preview, no refresh needed
+            added.push(item);
+          } catch (err){ failed++; e.target.value = ""; }
+        }
+        if (!added.length && skipped + failed === 0) throw new Error("no photo was uploaded");
+        if (added.length) def.set(current.config, "asset:" + kind);
+        if (skipped) toast(`${skipped} file(s) skipped — only images up to 12 MB are accepted (they get compressed automatically)`);
+        else if (failed) toast(`${failed} upload(s) failed — network or rules; the existing photos are untouched`);
+        else if (added.length > 1) toast(`${added.length} photos added ✔ (remember to Save)`);
+        else toast("Photo added ✔ — earlier photos stay (remember to Save)");
+      } else if (files[0].type.indexOf("audio/") === 0 || /\.(mp3|m4a|aac|ogg|wav)$/i.test(files[0].name)){
         /* MP3 → chunked inside Firestore (1 MiB document cap): free, no bucket */
+        const f = files[0];
         if (f.size > MUSIC_LIMIT_BYTES)
           throw new Error(`track is ${(f.size / 1048576).toFixed(1)} MB — please use an mp3 under 4 MB`);
         let lastToast = 0;
@@ -797,20 +856,22 @@ $$(".up[data-kind]").forEach(box => {           // delegated events (innerHTML i
         if (MUSIC_BLOB) URL.revokeObjectURL(MUSIC_BLOB);
         MUSIC_BLOB = URL.createObjectURL(f);
         if (box._a){ box._a.pause(); box._a = null; }
-        url = "asset:music";
+        def.set(current.config, "asset:music");
+        toast("Music uploaded ✔ (remember to Save)");
       } else {
         throw new Error("Only photos and mp3 tracks can be uploaded here (videos are built into the invitation)");
       }
-      def.set(current.config, url);
-      renderUploads(); toast("Uploaded ✔ (remember to Save)");
     } catch (err) {
       const m = String(err && err.message || err);
-      if (/unauthorized|permission/i.test(m))
-        toast("Upload blocked by rules — publish the latest firestore.rules text (README Part 2)");
+      if (/unauthorized|permission|failed to/i.test(m))
+        toast("Upload blocked by rules — publish the latest firestore.rules text (README Part 2, then click Publish TWICE)");
+      else if (/unavailable|offline|network|internet|timeout|abort/i.test(m))
+        toast("Network problem — nothing was removed, try again");
       else toast("Upload failed: " + m);
-      renderUploads();
     }
+    renderUploads();
     box.querySelector(".file") && (box.querySelector(".file").disabled = false);
+    e.target.value = "";   // same file can be picked again; never affects existing photos
   });
   box.addEventListener("input", e => {
     if (!e.target.classList.contains("urlin")) return;
@@ -827,6 +888,22 @@ $$(".up[data-kind]").forEach(box => {           // delegated events (innerHTML i
       else { box._a.pause(); b.textContent = "▶ preview"; }
       return;
     }
+    if (e.target.classList.contains("up-del")){         // delete ONE photo — the others stay
+      const kind = box.dataset.kind;
+      const id = e.target.dataset.id;
+      const cur = UP_DEFS[kind].get(current.config) || "";
+      if (DEMO_MODE){
+        ASSETS[kind] = (ASSETS[kind] || []).filter(p => p.id !== id);
+        if (!ASSETS[kind].length) UP_DEFS[kind].set(current.config, "");
+      } else if (cur.indexOf("asset:") === 0 && id === "__legacy__")
+        fb.fs.deleteDoc(fb.fs.doc(fb.db, "weddings", current.code, "assets", kind)).catch(() => {});
+      else if (cur.indexOf("asset:") === 0)
+        fb.fs.deleteDoc(fb.fs.doc(fb.db, "weddings", current.code, "assets", kind, "photos", id)).catch(() => {});
+      ASSETS[kind] = (ASSETS[kind] || []).filter(p => p.id !== id);
+      if (!ASSETS[kind].length && !DEMO_MODE) UP_DEFS[kind].set(current.config, "");
+      collect(); renderUploads(); toast("Photo deleted — the others are untouched");
+      return;
+    }
     if (!e.target.classList.contains("up-clear")) return;
     collect();
     const cur = UP_DEFS[box.dataset.kind].get(current.config) || "";
@@ -841,10 +918,13 @@ $$(".up[data-kind]").forEach(box => {           // delegated events (innerHTML i
         ).catch(() => {});
         fs.deleteDoc(fs.doc(fb.db, "weddings", current.code, "assets", "music")).catch(() => {});
         if (MUSIC_BLOB){ URL.revokeObjectURL(MUSIC_BLOB); MUSIC_BLOB = ""; }
-      } else
+      } else if (isPhotoSlot(slot))
+        clearSlotAssets(current.code, slot);
+      else
         fb.fs.deleteDoc(fb.fs.doc(fb.db, "weddings", current.code, "assets", slot)).catch(() => {});
     }
-    delete ASSETS[box.dataset.kind];
+    if (isPhotoSlot(box.dataset.kind)) ASSETS[box.dataset.kind] = [];
+    else delete ASSETS[box.dataset.kind];
     UP_DEFS[box.dataset.kind].set(current.config, ""); renderUploads();
   });
 });
@@ -895,10 +975,7 @@ async function openEditor(code){
   current.config = fullConfig(current.config);
   /* load the Firestore-stored photos for the previews */
   ASSETS = {};
-  await Promise.all(PHOTO_SLOTS.map(async s => {
-    try { const a = await fs.getDoc(fs.doc(fb.db, "weddings", code, "assets", s));
-          if (a.exists()) ASSETS[s] = a.data().dataUrl || ""; } catch (e) {}
-  }));
+  await Promise.all(PHOTO_SLOTS.map(s => collectSlotAssets(code, s)));
   /* uploaded mp3 (if any) → reassemble the chunks so the player previews it */
   if (String(current.config.media.music || "").indexOf("asset:") === 0){
     if (MUSIC_BLOB){ URL.revokeObjectURL(MUSIC_BLOB); MUSIC_BLOB = ""; }
@@ -960,10 +1037,12 @@ $("#b-del").onclick = async () => {
           (_, i) => fs.doc(fb.db, "weddings", current.code, "assets", "music", "chunks", String(i)));
       } catch (e) {}
       await Promise.all(musicDocs.map(r => fs.deleteDoc(r).catch(() => {})));
-      await Promise.all([...PHOTO_SLOTS, "music"].map(s =>
-        fs.deleteDoc(fs.doc(fb.db, "weddings", current.code, "assets", s)).catch(() => {})));
+      /* photo collections + legacy slot docs */
+      for (const s of PHOTO_SLOTS) await clearSlotAssets(current.code, s).catch(() => {});
+      await fs.deleteDoc(fs.doc(fb.db, "weddings", current.code, "assets", "music")).catch(() => {});
       await fs.deleteDoc(fs.doc(fb.db, "weddings", current.code));
       if (MUSIC_BLOB){ URL.revokeObjectURL(MUSIC_BLOB); MUSIC_BLOB = ""; }
+      ASSETS = {};
     }
     toast("Wedding deleted");
     unsubDoc?.(); current = null; showView("app");

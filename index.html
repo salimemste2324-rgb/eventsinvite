@@ -9,7 +9,7 @@
 <!-- ============ FONTS ============ -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Beau+Rivage&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Source+Sans+3:wght@300;400;600&family=Amiri:ital@0;1&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Beau+Rivage&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Source+Sans+3:wght@300;400;600&family=Amiri:ital@0;1&family=Great+Vibes&family=Marcellus&display=swap" rel="stylesheet">
 
 <!-- ============ LIBRARIES (cdnjs, pinned) ============ -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -159,17 +159,21 @@ a{color:var(--gold);text-decoration:none}
 /* Light warm vignette at the edges only — the couple stays clearly visible */
 #cover-scrim{position:absolute;inset:0;z-index:1;pointer-events:none;
   background:radial-gradient(115% 85% at 50% 44%, rgba(38,30,24,0) 42%, rgba(38,30,24,.42) 74%, rgba(26,20,15,.82) 100%)}
-/* Elegant wording, centered lower on the paper — fills the card, no empty gaps. Hidden until the card opens */
-.cover-inner{position:absolute;left:50%;top:47%;transform:translate(-50%,-50%);z-index:2;
-  display:flex;flex-direction:column;align-items:center;gap:2px;
-  pointer-events:none;opacity:0}
-.cover-kicker{font-family:var(--font-head);font-size:.68rem;letter-spacing:.42em;text-transform:uppercase;color:#8a6f45}
-.cover-names{font-family:var(--font-script);font-weight:400;
-  font-size:clamp(2rem,8.6vw,3.3rem);line-height:1.06;color:#3b2c1d;
+/* Elegant wording, centred inside the opened paper — the pearls + seal sit
+   across the middle of the frame, so the block nests in the lower half.
+   Hidden until the card opens */
+.cover-inner{position:absolute;left:50%;top:68%;transform:translate(-50%,-50%);z-index:2;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+  pointer-events:none;opacity:0;width:100%;max-width:80%;padding:24px;box-sizing:border-box}
+.cover-inner>*{text-align:center;min-width:0}
+.cover-kicker{font-family:'Marcellus',var(--font-head);font-size:clamp(.65rem,2.2vw,.85rem);
+  letter-spacing:.14em;text-transform:uppercase;color:#8a6f45;width:100%}
+.cover-names{font-family:'Great Vibes',var(--font-script);font-weight:400;
+  font-size:clamp(2.3rem,10vw,3.9rem);line-height:1.06;color:#3b2c1d;
   text-shadow:0 1px 1px rgba(255,255,255,.55)}
-.cover-amp{font-family:var(--font-script);color:#7c2d2d;font-size:clamp(1.3rem,5vw,1.9rem);line-height:1}
-.cover-rule{width:120px;height:1px;background:linear-gradient(90deg,transparent,#b9945a,transparent);margin:6px auto}
-.cover-date{font-family:var(--font-head);font-size:.86rem;font-weight:600;letter-spacing:.3em;color:#6d5636}
+.cover-amp{font-family:'Great Vibes',var(--font-script);color:#7c2d2d;font-size:clamp(1.3rem,5vw,2rem);line-height:1;margin:-4px 0}
+.cover-rule{width:min(160px,44vw);height:1px;background:linear-gradient(90deg,transparent,#b9945a,transparent);margin:4px auto}
+.cover-date{font-family:'Marcellus',var(--font-head);font-size:clamp(.72rem,2.4vw,.95rem);font-weight:400;letter-spacing:.06em;color:#6d5636;white-space:normal;max-width:100%}
 /* one-time gold shimmer that sweeps across the names after they appear */
 .cover-names.shimmer{position:relative;overflow:hidden}
 .cover-names.shimmer::after{content:"";position:absolute;top:0;left:-75%;width:45%;height:100%;
@@ -263,6 +267,23 @@ body.no-webgl .hero-names{display:block}
 .scroll-down .wheel{position:absolute;top:6px;left:50%;width:2px;height:6px;margin-left:-1px;border-radius:2px;
   background:var(--gold);animation:wheel 1.8s ease-in-out infinite}
 @keyframes wheel{0%{transform:translateY(0);opacity:1}70%{transform:translateY(11px);opacity:0}100%{opacity:0}}
+
+/* Hero line-art flowers — they draw themselves in, lean with the pointer,
+   and drift at their own pace while scrolling */
+.hero-flower{position:absolute;top:40%;width:clamp(84px,15vw,148px);z-index:1;
+  color:var(--gold);opacity:.85;pointer-events:none;
+  filter:drop-shadow(0 0 8px rgba(228,197,138,.35))}
+.hero-flower svg{display:block;width:100%;height:auto;overflow:visible}
+.hero-flower .fp,.hero-flower .fs{fill:none;stroke:currentColor;stroke-width:1.5;
+  stroke-linecap:round;stroke-linejoin:round}
+.hero-flower .f-core{fill:rgba(228,197,138,.2);stroke:currentColor;stroke-width:1.4}
+.hero-flower.f-left{left:max(8px,5vw)}
+.hero-flower.f-right{right:max(8px,5vw)}
+@media (max-width:720px){
+  .hero-flower{width:clamp(58px,19vw,92px);opacity:.5}
+  .hero-flower.f-left{left:-6px}
+  .hero-flower.f-right{right:-6px}
+}
 
 /* ---------- STORY ---------- */
 .story-card{max-width:660px;margin:0 auto;text-align:center;
@@ -510,6 +531,29 @@ body.hide-cursor #cursor-dot,body.hide-cursor #cursor-ring{display:none}
   animation:heartPulse 1.6s ease-in-out infinite}
 @media(max-width:759px){.float-icon.fi-heart{transform:rotate(90deg)}}
 
+/* =====================================================================
+   DOVES — two real white doves, released the moment the invitation is
+   opened. They live ONLY in the hero header, so they scroll away with it.
+   Each bird is a 4-layer rig cut from one real dove photograph:
+   tail · left wing · right wing · body-on-top. The wings actually
+   articulate around their shoulders (see initDoves), which is what sells
+   the flap — a flat squash of the whole photo reads as frozen.
+   ===================================================================== */
+#doves{position:absolute;top:0;left:50%;width:100vw;height:100svh;margin-left:-50vw;
+  z-index:3;overflow:hidden;pointer-events:none;opacity:0;transition:opacity 1s ease}
+body.doves-on #doves{opacity:1}
+.dove{position:absolute;top:0;left:0;width:130px;aspect-ratio:var(--ar,1.7143);
+  will-change:transform;transform:translate3d(-200vw,-200vh,0);
+  filter:drop-shadow(0 14px 16px rgba(0,0,0,.28))}
+.dove--far{filter:drop-shadow(0 9px 11px rgba(0,0,0,.16))}
+.dove i{position:absolute;inset:0;display:block;background-image:var(--dove-img);
+  background-size:100% 100%;background-repeat:no-repeat;will-change:transform}
+.dove .dt{z-index:1;clip-path:polygon(0 55%,100% 55%,100% 100%,0 100%)}
+.dove .dw{z-index:2}
+.dove .dw-l{clip-path:polygon(0 0,47% 0,47% 62%,0 62%);transform-origin:45% 43%}
+.dove .dw-r{clip-path:polygon(53% 0,100% 0,100% 62%,53% 62%);transform-origin:55% 43%}
+.dove .db{z-index:3;clip-path:polygon(33% 10%,67% 10%,67% 100%,33% 100%)}
+
 /* Utility */
 .hidden-access{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 .center{text-align:center}
@@ -521,9 +565,6 @@ body.hide-cursor #cursor-dot,body.hide-cursor #cursor-ring{display:none}
   section{padding:64px 16px}
   .btn{padding:13px 20px;font-size:.82rem;letter-spacing:.18em}
   #cover{overflow-y:auto;padding:20px 16px}
-  .cover-names{font-size:clamp(1.7rem,9.5vw,2.5rem)}
-  .cover-kicker{font-size:.5rem;letter-spacing:.24em}
-  .cover-date{font-size:.68rem;letter-spacing:.22em}
   #hero{padding-top:8vh}
   #hero-canvas{height:168px}
   .hero-tag{font-size:.95rem}
@@ -547,7 +588,7 @@ body.hide-cursor #cursor-dot,body.hide-cursor #cursor-ring{display:none}
 /* short/landscape phones */
 @media (max-height: 560px){
   #cover{justify-content:flex-start;padding-top:18px}
-  .cover-names{font-size:clamp(1.7rem,7vh,2.4rem)}
+  .cover-names{font-size:clamp(2.3rem,11vh,3.6rem)}
   .cover-inner{gap:4px}
 }
 
@@ -617,6 +658,16 @@ body.hide-cursor #cursor-dot,body.hide-cursor #cursor-ring{display:none}
 
   <!-- 2 · HERO -->
   <section id="hero">
+    <!-- ═══ doves — released once the guest opens the invitation; they live in
+           the hero header only, so they scroll away with it ═══ -->
+    <div id="doves" aria-hidden="true">
+      <div class="dove" data-dove="near" style="--ar:1.7143;--dove-img:url('dove-a.png')">
+        <i class="dt"></i><i class="dw dw-l"></i><i class="dw dw-r"></i><i class="db"></i>
+      </div>
+      <div class="dove dove--far" data-dove="far" style="--ar:1;--dove-img:url('dove-b.png')">
+        <i class="dt"></i><i class="dw dw-l"></i><i class="dw dw-r"></i><i class="db"></i>
+      </div>
+    </div>
     <canvas id="hero-canvas" aria-hidden="true"></canvas>
     <h1 class="hero-names" id="hero-names-dom"></h1>
     <p class="hero-tag" id="t-hero-tag">request the honour of your presence at their wedding</p>
@@ -624,6 +675,28 @@ body.hide-cursor #cursor-dot,body.hide-cursor #cursor-ring{display:none}
       <path id="flourish-path" d="M20 40 C 90 8, 150 8, 210 40 C 270 72, 330 72, 400 40"></path>
     </svg>
     <div class="hero-date" id="hero-date"></div>
+    <svg class="hero-flower f-left" viewBox="0 0 120 200" aria-hidden="true">
+      <path class="fs" d="M60 198 C 55 166, 66 138, 60 104"/>
+      <path class="fs" d="M60 152 C 47 148, 38 137, 38 124 C 51 129, 58 139, 60 152 Z"/>
+      <path class="fs" d="M60 176 C 73 172, 82 161, 82 148 C 69 153, 62 163, 60 176 Z"/>
+      <path class="fp" pathLength="100" transform="rotate(0 60 84)"   d="M60 84 C 48 72, 46 48, 60 36 C 74 48, 72 72, 60 84 Z"/>
+      <path class="fp" pathLength="100" transform="rotate(72 60 84)"  d="M60 84 C 48 72, 46 48, 60 36 C 74 48, 72 72, 60 84 Z"/>
+      <path class="fp" pathLength="100" transform="rotate(144 60 84)" d="M60 84 C 48 72, 46 48, 60 36 C 74 48, 72 72, 60 84 Z"/>
+      <path class="fp" pathLength="100" transform="rotate(216 60 84)" d="M60 84 C 48 72, 46 48, 60 36 C 74 48, 72 72, 60 84 Z"/>
+      <path class="fp" pathLength="100" transform="rotate(288 60 84)" d="M60 84 C 48 72, 46 48, 60 36 C 74 48, 72 72, 60 84 Z"/>
+      <circle class="f-core" cx="60" cy="84" r="5"/>
+    </svg>
+    <svg class="hero-flower f-right" viewBox="0 0 120 200" aria-hidden="true">
+      <path class="fs" d="M60 198 C 55 166, 66 138, 60 104"/>
+      <path class="fs" d="M60 152 C 47 148, 38 137, 38 124 C 51 129, 58 139, 60 152 Z"/>
+      <path class="fs" d="M60 176 C 73 172, 82 161, 82 148 C 69 153, 62 163, 60 176 Z"/>
+      <path class="fp" pathLength="100" transform="rotate(0 60 84)"   d="M60 84 C 48 72, 46 48, 60 36 C 74 48, 72 72, 60 84 Z"/>
+      <path class="fp" pathLength="100" transform="rotate(72 60 84)"  d="M60 84 C 48 72, 46 48, 60 36 C 74 48, 72 72, 60 84 Z"/>
+      <path class="fp" pathLength="100" transform="rotate(144 60 84)" d="M60 84 C 48 72, 46 48, 60 36 C 74 48, 72 72, 60 84 Z"/>
+      <path class="fp" pathLength="100" transform="rotate(216 60 84)" d="M60 84 C 48 72, 46 48, 60 36 C 74 48, 72 72, 60 84 Z"/>
+      <path class="fp" pathLength="100" transform="rotate(288 60 84)" d="M60 84 C 48 72, 46 48, 60 36 C 74 48, 72 72, 60 84 Z"/>
+      <circle class="f-core" cx="60" cy="84" r="5"/>
+    </svg>
     <div class="scroll-down"><div class="mouse"><div class="wheel"></div></div><span>Scroll</span></div>
   </section>
 
@@ -1174,6 +1247,7 @@ function runPreloader(done){
    ===================================================================== */
 let bg = null;          // background scene controller
 let coverScene = null;  // envelope scene controller
+let doves = null;       // released dove flock (built after the card opens)
 let coverReady = false; // true once the preloader is gone — only then does a tap on the card count
 let heroScene = null;   // hero ring/shimmer controller
 let w3d = null;         // scroll-driven 3D wedding scene controller
@@ -2087,6 +2161,7 @@ function startLoop(){
     if (heroScene)  heroScene.tick();
     if (w3d)  w3d.tick();
     if (ck)   ck.tick();
+    if (doves) doves.tick(time);
     if (window.ScrollTrigger) ScrollTrigger.update();
     requestAnimationFrame(loop);
   };
@@ -2113,18 +2188,59 @@ function initAnimations(){
 
   if (REDUCED){ $$("section .section-label, .section-title, .gold-rule").forEach(e => e.style.opacity = 1); revealSpine(); return; }
 
-  /* ---- HERO: names canvas reveal (clip-path "write in"), tag, date ---- */
+  /* ---- HERO: names bloom from the centre, tag rises word by word,
+     date's tracking settles, flowers draw themselves in ---- */
   const heroTl = gsap.timeline({ delay: .15, scrollTrigger: { trigger: "#hero", start: "top 80%" } });
   heroTl
-    .from("#hero-canvas", { clipPath: "inset(0 100% 0 0)", opacity: 0, duration: 1.6, ease: "power2.inOut" })
-    .from(".hero-tag", { y: 22, opacity: 0, duration: .8 }, "-=1.0")
-    .from(".hero-date", { y: 22, opacity: 0, duration: .8 }, "-=.55")
-    .from(".scroll-down", { opacity: 0, y: 12, duration: .8 }, "-=.4");
+    /* names: wipe open from the centre, sharpening out of blur */
+    .fromTo("#hero-canvas",
+      { clipPath: "inset(0 50% 0 50%)", opacity: 0, filter: "blur(10px)", scale: .96 },
+      { clipPath: "inset(0 0% 0 0%)", opacity: 1, filter: "blur(0px)", scale: 1, duration: 1.5, ease: "power2.inOut" })
+    /* tag: each word rises out of its own mask */
+  const tag = $("#t-hero-tag");
+  if (tag){
+    tag.innerHTML = tag.textContent.trim().split(/\s+/)
+      .map(w => `<span class="tw"><i>${w}</i></span>`).join(" ");
+    heroTl.from(tag.querySelectorAll(".tw > i"),
+      { yPercent: 118, rotate: 4, stagger: .07, duration: .8, ease: "power3.out" }, "-=1.0");
+  }
+  heroTl
+    /* date: wide-tracked letters settle into place, sharpening as they land */
+    .fromTo(".hero-date",
+      { letterSpacing: ".95em", opacity: 0, filter: "blur(6px)" },
+      { letterSpacing: ".4em", opacity: 1, filter: "blur(0px)", duration: 1.1, ease: "power2.out" }, "-=.7")
+    .from(".scroll-down", { opacity: 0, y: 12, duration: .8 }, "-=.5");
   /* flourish signature stroke — drawn with its real path length */
   const fp = $("#flourish path");
   if (fp){ const len = fp.getTotalLength();
     fp.style.setProperty("--len", len); fp.style.strokeDasharray = len; fp.style.strokeDashoffset = len;
     heroTl.fromTo(fp, { strokeDashoffset: len }, { strokeDashoffset: 0, duration: 1.4, ease: "power1.inOut" }, "-=1.3"); }
+
+  /* ---- Hero flowers: stems + petals draw themselves in one by one,
+     then the blooms live — leaning toward the pointer and drifting at
+     their own pace as the guest scrolls ---- */
+  $$(".hero-flower").forEach((fl, i) => {
+    const strokes = $$(".fp, .fs", fl);
+    strokes.forEach(p => { const L = p.getTotalLength();
+      p.style.strokeDasharray = L; p.style.strokeDashoffset = L; });
+    gsap.timeline({ delay: .55 + i * .2, scrollTrigger: { trigger: "#hero", start: "top 80%" } })
+      .from(fl, { opacity: 0, scale: .72, transformOrigin: "50% 100%", duration: .8, ease: "back.out(1.7)" }, 0)
+      .to(strokes, { strokeDashoffset: 0, duration: .9, stagger: .1, ease: "power1.inOut" }, .15)
+      .from($$(".f-core", fl), { scale: 0, transformOrigin: "50% 50%", duration: .6, ease: "back.out(2.5)" }, "-=.35");
+    /* dynamic: the bloom leans toward the pointer (vertical only at rest — no idle drift) */
+    if (matchMedia("(pointer:fine)").matches){
+      const qr = gsap.quickTo(fl, "rotation", { duration: .9, ease: "power3" });
+      const qy = gsap.quickTo(fl, "y", { duration: 1.2, ease: "power3" });
+      $("#hero").addEventListener("mousemove", e => {
+        const r = fl.getBoundingClientRect();
+        qr(gsap.utils.clamp(-9, 9, (e.clientX - (r.left + r.width / 2)) / 45));
+        qy(gsap.utils.clamp(-10, 10, (e.clientY - (r.top + r.height / 2)) / 50));
+      });
+    }
+    /* scroll-scrubbed: each flower floats up at its own speed */
+    gsap.to(fl, { yPercent: i ? -36 : -24, ease: "none",
+      scrollTrigger: { trigger: "#hero", start: "top top", end: "bottom top", scrub: 1.2 } });
+  });
 
   /* ---- Generic fade-and-rise for every section, staggered children ---- */
   $$("main section").forEach(sec => {
@@ -2618,6 +2734,129 @@ function initInteractions(){
 }
 
 /* =====================================================================
+   DOVES — a pair of real white doves released the instant the card opens.
+   Each bird's wings are hinged at the shoulder and driven through a true
+   flap cycle — a quick power-stroke down, a slower recovery up — and
+   between flaps they lock out and glide, at random, the way doves do.
+   The bird banks into its climbs, one flies nearer and bigger than the
+   other for depth, and the guest's scroll drives the flock: down lifts
+   it and speeds the beats, up lets it sink and settle.
+   ===================================================================== */
+function initDoves(){
+  if (REDUCED || doves) return;
+  const layer = $("#doves");
+  if (!layer) return;
+  const nodes = $$(".dove", layer);
+  if (!nodes.length) return;
+
+  const rnd  = (a, b) => a + Math.random() * (b - a);
+  /* one full beat, u = 0…1 → 0 wings raised … 1 wings pressed fully down.
+     Asymmetric on purpose: real doves snap down and recover more slowly. */
+  const beat = u => u < .38 ? Math.sin((u / .38) * Math.PI / 2)
+                            : Math.cos(((u - .38) / .62) * Math.PI / 2);
+
+  const birds = nodes.map((el, i) => {
+    const far = el.classList.contains("dove--far");
+    return {
+      el, wl: $(".dw-l", el), wr: $(".dw-r", el),
+      dir:   far ? -1 : 1,          // the near bird crosses left→right, the far one back
+      depth: far ? .62 : .1,        // 0 = close, 1 = distant (smaller, slower, fainter)
+      alt:   far ? .16 : .30,       // resting altitude, fraction of the sky band
+      base:  far ? 78 : 104,        // cruise speed, px/s
+      rate:  far ? 2.1 : 2.6,       // wing-beats per second
+      x: layer.clientWidth * (far ? .62 : .38), y: layer.clientHeight * .62, prevY: 0,
+      w: 130, u: Math.random(), s: 0,
+      glide: 0, nextGlide: rnd(2.4, 5),
+      t: rnd(0, 9), wob: rnd(0, 6.28),
+      vyS: 0, bank: 0, lift: 0,
+    };
+  });
+
+  /* size each bird for the sky it is flying in */
+  const place = b => {
+    const vw = layer.clientWidth, near = b.depth < .5;
+    b.w = clamp(vw * (near ? .24 : .15), near ? 84 : 54, near ? 178 : 120);
+    b.el.style.width = b.w + "px";
+  };
+  birds.forEach(place);
+  addEventListener("resize", () => birds.forEach(place), { passive: true });
+
+  document.body.classList.add("doves-on");
+
+  let released = 0;   // 0→1 over ~1.8s while the flock bursts out of the card
+  let climb    = 0;   // smoothed scroll-driven altitude (down = +)
+  let energy   = 0;   // smoothed scroll speed → faster beats, quicker cruise
+  let lastY    = scrollState.y;
+  let prev     = performance.now();
+
+  function tick(now){
+    const dt = clamp((now - prev) / 1000, .001, .05); prev = now;
+    const vw = layer.clientWidth, vh = layer.clientHeight;
+
+    /* ---- read the guest's scroll: how far and how fast ---- */
+    const dy = scrollState.y - lastY; lastY = scrollState.y;
+    climb  = clamp(climb + dy * .32, -vh * .18, vh * .40) * (1 - dt * .22);
+    energy = energy * (1 - dt * 2.4) + clamp(Math.abs(dy) / 26, 0, 1) * dt * 2.4;
+
+    released = Math.min(1, released + dt * .58);
+    const ease = released * released * (3 - 2 * released);
+
+    for (const b of birds){
+      b.t += dt;
+
+      /* ---- forward flight: depth slows the far bird, scrolling excites both ---- */
+      const speed = b.base * (1 - b.depth * .42) * (1 + energy * 1.1);
+      b.x += b.dir * speed * dt;
+
+      /* ---- altitude: resting band + two drifting sines + the scroll climb ---- */
+      const band = b.alt * vh
+                 - climb * (1 - b.depth * .45)
+                 + Math.sin(b.t * .55 + b.wob)      * vh * .045
+                 + Math.sin(b.t * 1.37 + b.wob * 2) * vh * .016;
+      const target = clamp(band, vh * .07, vh * .66);
+      b.y += (target - b.y) * Math.min(1, dt * 2.1);
+
+      /* ---- pass the flock round when it leaves the sky ---- */
+      if (b.dir > 0 && b.x > vw + b.w)    { b.x = -b.w * 1.25; b.alt = rnd(.13, .37); place(b); }
+      if (b.dir < 0 && b.x < -b.w * 1.25) { b.x = vw + b.w;    b.alt = rnd(.13, .37); place(b); }
+
+      /* ---- alternate flapping with restful glides ---- */
+      b.nextGlide -= dt;
+      if (b.glide > 0) b.glide = Math.max(0, b.glide - dt);
+      else if (b.nextGlide <= 0 && energy < .14) { b.glide = rnd(.7, 1.8); b.nextGlide = rnd(3.6, 7.4); }
+
+      const rate   = b.rate * (1 + energy * 2.3) * (b.glide ? .1 : 1);
+      b.u = (b.u + dt * rate) % 1;
+      const stroke = b.glide ? 0 : beat(b.u);
+
+      /* the down-stroke is what actually lifts a bird, so let it rise a little */
+      b.lift += ((b.glide ? 0 : Math.sin(b.u * Math.PI)) - b.lift) * Math.min(1, dt * 8);
+
+      /* ---- bank into the climb: nose up going up, nose down coming back ---- */
+      const vyNow = (b.y - (b.prevY || b.y)) / dt; b.prevY = b.y;
+      b.vyS += (vyNow - b.vyS) * Math.min(1, dt * 5);
+      const want = clamp(b.vyS * .055, -11, 11) * b.dir - b.lift * 3 * b.dir;
+      b.bank += (want - b.bank) * Math.min(1, dt * 4);
+
+      b.s += (ease - b.s) * Math.min(1, dt * 3.4);
+
+      b.el.style.transform =
+        `translate3d(${b.x.toFixed(1)}px,${(b.y - b.lift * 7).toFixed(1)}px,0) ` +
+        `rotate(${b.bank.toFixed(2)}deg) scale(${b.s.toFixed(3)})`;
+
+      /* ---- the wing beat: both wings hinge down through the stroke, feathers
+         compress a touch at the bottom, then sweep back up ---- */
+      const deg  = (4 + 34 * stroke).toFixed(2);
+      const flex = (1 - .10 * stroke).toFixed(3);
+      b.wl.style.transform = `rotate(-${deg}deg) scaleY(${flex})`;
+      b.wr.style.transform = `rotate(${deg}deg) scaleY(${flex})`;
+      b.el.style.opacity = ((b.depth < .5 ? 1 : .86) * b.s).toFixed(3);
+    }
+  }
+  doves = { tick };
+}
+
+/* =====================================================================
    COVER → SITE TRANSITION (cinematic fade + zoom)
    ===================================================================== */
 function initCoverOpen(){
@@ -2638,6 +2877,7 @@ function initCoverOpen(){
       music.start(); mb.classList.add("playing");
       initLenis();
       initAnimations();
+      initDoves();      /* the flock is released as the invitation opens */
       /* scroll-driven 3D scenes — need the site visible to size their canvases */
       if (HAS_WEBGL && !REDUCED && window.THREE){
         try{ w3d = new (function(){ return initWedding3D.call(this); })(); }
@@ -2697,11 +2937,28 @@ function initCoverOpen(){
         /* keep .cover-inner centered through GSAP's own transform composition */
         gsap.set(names, { xPercent: -50, yPercent: -50 });
         gsap.timeline({ onComplete: () => { reveal(); flash.remove(); } })
-          /* 1. names + date bloom onto the paper — fast and lively */
+          /* 1. the wording assembles piece by piece, each line its own move */
           .fromTo(names, { opacity: 0 }, { opacity: 1, duration: .15 }, 0)
-          .fromTo("#cover .cover-inner > *",
-            { y: 24, opacity: 0, scale: .92, filter: "blur(5px)" },
-            { y: 0, opacity: 1, scale: 1, filter: "blur(0px)", stagger: .09, duration: .5, ease: "back.out(1.6)" }, .08)
+          /* kicker: letters track in from wide spacing, sharpening out of blur */
+          .fromTo("#cover .cover-kicker",
+            { opacity: 0, letterSpacing: "1.1em", filter: "blur(6px)" },
+            { opacity: 1, letterSpacing: ".14em", filter: "blur(0px)", duration: .9, ease: "power2.out" }, .1)
+          /* names: cascade down from above with a slight tilt, un-blurring as they land */
+          .fromTo("#cover .cover-names",
+            { y: -48, opacity: 0, skewY: 6, filter: "blur(10px)" },
+            { y: 0, opacity: 1, skewY: 0, filter: "blur(0px)", duration: .85, stagger: .16, ease: "power3.out" }, .25)
+          /* ampersand: pops in with an elastic snap */
+          .fromTo("#cover .cover-amp",
+            { scale: 0, opacity: 0, rotation: -30 },
+            { scale: 1, opacity: 1, rotation: 0, duration: .8, ease: "elastic.out(1, 0.45)" }, .75)
+          /* gold rule: draws itself outward from the center */
+          .fromTo("#cover .cover-rule",
+            { scaleX: 0, opacity: 0 },
+            { scaleX: 1, opacity: 1, duration: .7, ease: "power2.inOut" }, 1.05)
+          /* date: rises gently out of a soft blur */
+          .fromTo("#cover .cover-date",
+            { y: 26, opacity: 0, filter: "blur(6px)" },
+            { y: 0, opacity: 1, filter: "blur(0px)", duration: .8, ease: "power2.out" }, 1.2)
           /* 2. gold shine sweeps across the names while they hold */
           .add(() => { const nm = $$("#cover .cover-names"); nm.forEach(e => { e.classList.remove("shimmer"); void e.offsetWidth; e.classList.add("shimmer"); }); }, ">-.15")
           .to({}, { duration: 1.1 })

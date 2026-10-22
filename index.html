@@ -162,9 +162,9 @@ a{color:var(--gold);text-decoration:none}
 /* Elegant wording, centred inside the opened paper — the pearls + seal sit
    across the middle of the frame, so the block nests in the lower half.
    Hidden until the card opens */
-.cover-inner{position:absolute;left:50%;top:68%;transform:translate(-50%,-50%);z-index:2;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
-  pointer-events:none;opacity:0;width:100%;max-width:80%;padding:24px;box-sizing:border-box}
+.cover-inner{position:absolute;left:50%;top:52%;transform:translate(-50%,-50%);z-index:2;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:clamp(5px,1.3vh,11px);
+  pointer-events:none;opacity:0;width:100%;max-width:min(86%,420px);padding:24px;box-sizing:border-box}
 .cover-inner>*{text-align:center;min-width:0}
 .cover-kicker{font-family:'Marcellus',var(--font-head);font-size:clamp(.65rem,2.2vw,.85rem);
   letter-spacing:.14em;text-transform:uppercase;color:#8a6f45;width:100%}
@@ -174,6 +174,26 @@ a{color:var(--gold);text-decoration:none}
 .cover-amp{font-family:'Great Vibes',var(--font-script);color:#7c2d2d;font-size:clamp(1.3rem,5vw,2rem);line-height:1;margin:-4px 0}
 .cover-rule{width:min(160px,44vw);height:1px;background:linear-gradient(90deg,transparent,#b9945a,transparent);margin:4px auto}
 .cover-date{font-family:'Marcellus',var(--font-head);font-size:clamp(.72rem,2.4vw,.95rem);font-weight:400;letter-spacing:.06em;color:#6d5636;white-space:normal;max-width:100%}
+
+/* ---- The couple, framed INTO the paper ------------------------------------
+   Arched window, gold rule, a cream mat between them, corner diamonds at the
+   base — the same visual language as the rest of the invitation, printed on
+   the card itself. It heads the block, then the kicker, the two names, the
+   gold rule and the date follow underneath with real air between them.      */
+.cover-photo{position:relative;flex:none;width:clamp(122px,33vw,172px);
+  margin:0 auto clamp(12px,2.6vh,20px);pointer-events:none}
+.cover-photo .cp-win{display:block;position:relative;width:100%;height:clamp(116px,27vh,178px);
+  overflow:hidden;border-radius:999px 999px 5px 5px;background:#0b0908;
+  box-shadow:0 0 0 1.5px #b9945a,0 0 0 5px rgba(253,246,231,.92),0 0 0 6.5px rgba(185,148,90,.55),
+             0 12px 26px rgba(58,44,29,.38)}
+.cover-photo img{display:block;width:100%;height:100%;object-fit:cover;object-position:50% 22%}
+/* vellum at the base of the arch so the photo settles into the paper */
+.cover-photo .cp-win::after{content:"";position:absolute;left:0;right:0;bottom:0;height:30%;
+  pointer-events:none;background:linear-gradient(transparent,rgba(11,9,8,.5))}
+.cover-photo .cp-dia{position:absolute;bottom:-4px;width:7px;height:7px;background:#b9945a;
+  transform:rotate(45deg);box-shadow:0 0 6px rgba(185,148,90,.55)}
+.cover-photo .cp-dia.l{left:-4px}.cover-photo .cp-dia.r{right:-4px}
+.cover-photo.no-photo{display:none}
 /* one-time gold shimmer that sweeps across the names after they appear */
 .cover-names.shimmer{position:relative;overflow:hidden}
 .cover-names.shimmer::after{content:"";position:absolute;top:0;left:-75%;width:45%;height:100%;
@@ -242,7 +262,7 @@ section{position:relative;padding:clamp(70px,14vh,120px) 22px;max-width:1060px;m
 
 /* ---------- HERO ---------- */
 #hero{min-height:100svh;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  text-align:center;max-width:none;padding-top:12vh}
+  text-align:center;max-width:none;padding-top:clamp(54px,7vh,88px)}
 #hero-canvas{width:min(560px,92vw);height:210px;flex:none}
 /* DOM names: always in the page (fallback + a11y). Shown only without WebGL. */
 .hero-names{display:none;font-family:var(--font-script);font-size:clamp(2.8rem,12vw,5rem);line-height:1.1;
@@ -642,6 +662,10 @@ body.doves-on #doves{opacity:1}
   <div id="cover-scrim" aria-hidden="true"></div>
 
   <div class="cover-inner">
+    <figure class="cover-photo" id="cover-photo">
+      <span class="cp-win"><img id="img-card" alt="The couple"></span>
+      <i class="cp-dia l" aria-hidden="true"></i><i class="cp-dia r" aria-hidden="true"></i>
+    </figure>
     <div class="cover-kicker" id="t-cover-kicker">Together with their families</div>
     <h1 class="cover-names" id="cover-name1"></h1>
     <div class="cover-amp">&amp;</div>
@@ -1002,6 +1026,7 @@ const DEFAULT_CONFIG = {
     groom: "groom.png",
     venue: "venue.png",
     couple: "couple.png",                         // invitation card + footer
+    card:  "couple-card.jpeg",                    // arched photo framed into the invitation paper on the cover
   },
 
   /* Decorative wedding icons streamed from the Bootstrap Icons CDN */
@@ -1156,6 +1181,18 @@ function fillContent(){
     el.onerror = () => { el.style.display = "none"; }; };
   setBg("#img-bride", CONFIG.photos.bride);
   setBg("#img-groom", CONFIG.photos.groom);
+
+  /* the couple, framed into the invitation paper on the cover card */
+  {
+    const frame = $("#cover-photo"), himg = $("#img-card");
+    if (frame && himg){
+      if (CONFIG.photos.card){
+        himg.src = CONFIG.photos.card;
+        himg.alt = FULL_NAME;
+        himg.onerror = () => frame.classList.add("no-photo");
+      } else frame.classList.add("no-photo");
+    }
+  }
   $("#p-name-bride").textContent = CONFIG.names.bride;
   $("#p-name-groom").textContent = CONFIG.names.groom;
   if (CONFIG.names.brideQuote) $("#p-quote-bride").textContent = CONFIG.names.brideQuote;
@@ -2886,21 +2923,24 @@ function initCoverOpen(){
         catch(e){ console.warn("cake scene failed", e); ck = null; }
       }
       if (!w3d){ const c = $(".w3d-caption"); if (c) c.style.opacity = 1; $(".w3d-hint") && ($(".w3d-hint").style.display = "none"); }
-      /* ambient background video — plays ONLY through the opening chapters
-         (cover → hero → Our Story), then fades away for the rest of the site */
+      /* ambient background video — full-strength behind the hero header, then
+         it fades away as the hero leaves and returns if the guest scrolls back
+         up. Our Story onward stays clean so the sections keep their contrast. */
       if (!REDUCED && CONFIG.media.video){
         const v = $("#bg-video"), veil = $("#video-veil");
         v.src = CONFIG.media.video;
-        const show = () => { v.classList.add("show"); veil.classList.add("show"); };
+        const show = () => { v.classList.add("show"); veil.classList.add("show");
+                             /* start fully visible — the scrub below owns it */
+                             v.style.opacity = .85; veil.style.opacity = 1; };
         v.play().then(show).catch(() => {
           /* autoplay blocked: retry once on the next tap, then give up quietly */
           addEventListener("pointerdown", () => v.play().then(show).catch(() => v.removeAttribute("src")), { once: true });
         });
-        /* scrub the video + veil opacity down to 0 as the story section ENDS,
-           and back up when the guest scrolls up again */
+        /* scrub: 1 while the hero fills the screen, 0 once it has scrolled out,
+           and the same ramp in reverse on the way back up */
         if (window.ScrollTrigger){
           ScrollTrigger.create({
-            trigger: "#story", start: "bottom 78%", end: "bottom 16%", scrub: true,
+            trigger: "#hero", start: "top top", end: "bottom top", scrub: true,
             onUpdate: st => {
               v.classList.add("no-tr"); veil.classList.add("no-tr");
               const o = 1 - st.progress;
@@ -2939,26 +2979,30 @@ function initCoverOpen(){
         gsap.timeline({ onComplete: () => { reveal(); flash.remove(); } })
           /* 1. the wording assembles piece by piece, each line its own move */
           .fromTo(names, { opacity: 0 }, { opacity: 1, duration: .15 }, 0)
+          /* the couple's photo prints into the paper first — the rest follows */
+          .fromTo("#cover .cover-photo",
+            { opacity: 0, y: 20, scale: .9, filter: "blur(9px)" },
+            { opacity: 1, y: 0, scale: 1, filter: "blur(0px)", duration: .95, ease: "power3.out" }, 0)
           /* kicker: letters track in from wide spacing, sharpening out of blur */
           .fromTo("#cover .cover-kicker",
             { opacity: 0, letterSpacing: "1.1em", filter: "blur(6px)" },
-            { opacity: 1, letterSpacing: ".14em", filter: "blur(0px)", duration: .9, ease: "power2.out" }, .1)
+            { opacity: 1, letterSpacing: ".14em", filter: "blur(0px)", duration: .9, ease: "power2.out" }, .2)
           /* names: cascade down from above with a slight tilt, un-blurring as they land */
           .fromTo("#cover .cover-names",
             { y: -48, opacity: 0, skewY: 6, filter: "blur(10px)" },
-            { y: 0, opacity: 1, skewY: 0, filter: "blur(0px)", duration: .85, stagger: .16, ease: "power3.out" }, .25)
+            { y: 0, opacity: 1, skewY: 0, filter: "blur(0px)", duration: .85, stagger: .16, ease: "power3.out" }, .34)
           /* ampersand: pops in with an elastic snap */
           .fromTo("#cover .cover-amp",
             { scale: 0, opacity: 0, rotation: -30 },
-            { scale: 1, opacity: 1, rotation: 0, duration: .8, ease: "elastic.out(1, 0.45)" }, .75)
+            { scale: 1, opacity: 1, rotation: 0, duration: .8, ease: "elastic.out(1, 0.45)" }, .8)
           /* gold rule: draws itself outward from the center */
           .fromTo("#cover .cover-rule",
             { scaleX: 0, opacity: 0 },
-            { scaleX: 1, opacity: 1, duration: .7, ease: "power2.inOut" }, 1.05)
+            { scaleX: 1, opacity: 1, duration: .7, ease: "power2.inOut" }, 1.08)
           /* date: rises gently out of a soft blur */
           .fromTo("#cover .cover-date",
             { y: 26, opacity: 0, filter: "blur(6px)" },
-            { y: 0, opacity: 1, filter: "blur(0px)", duration: .8, ease: "power2.out" }, 1.2)
+            { y: 0, opacity: 1, filter: "blur(0px)", duration: .8, ease: "power2.out" }, 1.26)
           /* 2. gold shine sweeps across the names while they hold */
           .add(() => { const nm = $$("#cover .cover-names"); nm.forEach(e => { e.classList.remove("shimmer"); void e.offsetWidth; e.classList.add("shimmer"); }); }, ">-.15")
           .to({}, { duration: 1.1 })
@@ -3020,7 +3064,7 @@ function resolveEmbedded(d){                    // raw config → real data in p
     if (v.indexOf("embed:") !== 0) return;
     const slot = v.slice(6);
     o[k] = map[slot] || map[slot.replace("-photo", "")] || ""; };   // "" → bundled default fills in
-  if (d.photos) ["bride", "groom", "couple", "venue"].forEach(k => swap(d.photos, k));
+  if (d.photos) ["bride", "groom", "couple", "venue", "card"].forEach(k => swap(d.photos, k));
   if (d.venue)  swap(d.venue, "photoUrl");
   if (d.media)  swap(d.media, "music");
   return d;
